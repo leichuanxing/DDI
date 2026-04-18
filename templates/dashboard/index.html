@@ -1,0 +1,344 @@
+{% extends 'base.html' %}
+
+{% block title %}首页仪表盘{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-speedometer2"></i> 首页仪表盘</h4>
+    <span class="text-muted">系统运行状态总览</span>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row g-3 mb-4">
+    <!-- IPAM 统计 -->
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary me-3">
+                    <i class="bi bi-pci-network"></i>
+                </div>
+                <div>
+                    <div class="stat-value text-primary">{{ stats.ip_total }}</div>
+                    <div class="stat-label">IP地址总数</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-success bg-opacity-10 text-success me-3">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div>
+                    <div class="stat-value text-success">{{ stats.ip_allocated }}</div>
+                    <div class="stat-label">已分配IP</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-info bg-opacity-10 text-info me-3">
+                    <i class="bi bi-hdd-stack"></i>
+                </div>
+                <div>
+                    <div class="stat-value text-info">{{ stats.subnet_count }}</div>
+                    <div class="stat-label">子网总数</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning me-3">
+                    <i class="bi bi-globe"></i>
+                </div>
+                <div>
+                    <div class="stat-value text-warning">{{ stats.dns_record_count }}</div>
+                    <div class="stat-label">DNS记录</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 第二行统计 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4 col-lg-2">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <div class="stat-value" style="color: #28a745; font-size: 24px;">{{ stats.ip_available }}</div>
+                <div class="stat-label">空闲IP</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 col-lg-2">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <div class="stat-value" style="color: #fd7e14; font-size: 24px;">{{ stats.ip_reserved }}</div>
+                <div class="stat-label">保留IP</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 col-lg-2">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <div class="stat-value" style="color: #dc3545; font-size: 24px;">{{ stats.ip_conflict }}</div>
+                <div class="stat-label">冲突IP</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 col-lg-2">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <div class="stat-value" style="color: #17a2b8; font-size: 24px;">{{ stats.dhcp_pool_count }}</div>
+                <div class="stat-label">DHCP池</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 col-lg-2">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <div class="stat-value" style="color: #6610f2; font-size: 24px;">{{ stats.dhcp_active_lease }}</div>
+                <div class="stat-label">活跃租约</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 col-lg-2">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <div class="stat-value" style="color: #6c757d; font-size: 24px;">{{ stats.device_count }}</div>
+                <div class="stat-label">设备数</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表区域 -->
+<div class="row g-4 mb-4">
+    <!-- IP使用率 -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-pie-chart"></i> IP使用率
+            </div>
+            <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                <canvas id="usageChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 子网使用情况 -->
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-bar-chart"></i> 各子网IP使用情况
+            </div>
+            <div class="card-body">
+                <canvas id="subnetChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 第三行图表 -->
+<div class="row g-4 mb-4">
+    <!-- DNS记录分布 -->
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-diagram-2"></i> DNS记录类型分布
+            </div>
+            <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 250px;">
+                <canvas id="dnsChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- VLAN分布 -->
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-diagram-3"></i> VLAN地址分布
+            </div>
+            <div class="card-body">
+                <canvas id="vlanChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 告警信息 + 最近操作 -->
+<div class="row g-4">
+    <!-- 告警 -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between">
+                <span><i class="bi bi-exclamation-triangle"></i> 系统告警</span>
+                {% if alerts %}
+                <span class="badge bg-danger">{{ alerts|length }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if alerts %}
+                <div class="list-group list-group-flush">
+                    {% for alert in alerts %}
+                    <div class="alert alert-{{ alert.level }} alert-card py-2 px-3 mb-2 small">
+                        {{ alert.message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-check-circle fs-1 d-block mb-2 text-success"></i>
+                    <p>暂无告警信息，系统运行正常</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 最近操作 -->
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i> 最近操作记录
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>时间</th>
+                                <th>操作用户</th>
+                                <th>模块</th>
+                                <th>操作类型</th>
+                                <th>变更内容</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in recent_logs %}
+                            <tr>
+                                <td class="text-muted">{{ log.operation_time|date:"m-d H:i:s" }}</td>
+                                <td>{{ log.user.username|default:"-" }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ log.module }}</span>
+                                </td>
+                                <td>{{ log.action }}</td>
+                                <td class="text-truncate" style="max-width: 300px;" title="{{ log.new_value }}">
+                                    {{ log.new_value|truncatechars:50 }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-3">暂无操作记录</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// IP使用率饼图
+const usageCtx = document.getElementById('usageChart').getContext('2d');
+new Chart(usageCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['已分配', '空闲', '保留', '冲突'],
+        datasets: [{
+            data: [{{ stats.ip_allocated }}, {{ stats.ip_available }}, {{ stats.ip_reserved }}, {{ stats.ip_conflict }}],
+            backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545'],
+            borderWidth: 0,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'bottom' }
+        },
+        cutout: '60%',
+    }
+});
+
+// 子网使用柱状图
+const subnetCtx = document.getElementById('subnetChart').getContext('2d');
+new Chart(subnetCtx, {
+    type: 'bar',
+    data: {
+        labels: [{% for s in subnet_stats %}'{{ s.name|truncatewords:2 }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        datasets: [
+            {
+                label: '已分配',
+                data: [{% for s in subnet_stats %}{{ s.allocated }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                backgroundColor: '#0d6efd',
+            },
+            {
+                label: '可用',
+                data: [{% for s in subnet_stats %}{{ s.available }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                backgroundColor: '#198754',
+            },
+        ]
+    },
+    options: {
+        responsive: true,
+        scales: { x: { stacked: true }, y: { stacked: true } },
+        plugins: { legend: { position: 'top' } }
+    }
+});
+
+// DNS记录分布图
+const dnsCtx = document.getElementById('dnsChart').getContext('2d');
+new Chart(dnsCtx, {
+    type: 'pie',
+    data: {
+        labels: [{% for k, v in dns_types.items %}'{{ k }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for k, v in dns_types.items %}{{ v }}{% if not forloop.last %},{% endif %}{% endfor %}],
+            backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8', '#fd7e14'],
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'right' } }
+    }
+});
+
+// VLAN分布图
+const vlanCtx = document.getElementById('vlanChart').getContext('2d');
+new Chart(vlanCtx, {
+    type: 'bar',
+    data: {
+        labels: [{% for v in vlan_data %}'VLAN{{ v.vlan_id }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            label: 'IP数量',
+            data: [{% for v in vlan_data %}{{ v.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+            backgroundColor: ['#4fd1c5'],
+        }]
+    },
+    options: {
+        responsive: true,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true } }
+    }
+});
+</script>
+{% endblock %}

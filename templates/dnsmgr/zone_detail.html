@@ -1,0 +1,475 @@
+{% extends 'base.html' %}
+
+{% block title %}DNS区域 - {{ zone.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item"><a href="{% url 'dnsmgr:zone_list' %}">DNS区域</a></li>
+                <li class="breadcrumb-item active">{{ zone.name }}</li>
+            </ol>
+        </nav>
+    </div>
+    <div>
+        <button type="button" class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#addRecordModal">
+            <i class="bi bi-plus-lg"></i> 新增记录
+        </button>
+        <a href="{% url 'dnsmgr:zone_edit' zone.pk %}" class="btn btn-outline-secondary btn-sm me-2">编辑区域</a>
+        <a href="{% url 'dnsmgr:zone_delete' zone.pk %}" class="btn btn-outline-danger btn-sm">删除区域</a>
+    </div>
+</div>
+
+<!-- 区域信息 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <span class="badge {% if zone.zone_type == 'forward' %}bg-info{% else %}bg-secondary{% endif %}">
+                    {{ zone.get_zone_type_display }}
+                </span>
+                <strong>{{ zone.name }}</strong> | 主DNS: <code>{{ zone.primary_dns|default:"-" }}</code>
+            </div>
+            <div class="col-auto ms-auto small text-muted">
+                共 {{ records|length }} 条记录 | 启用: <span class="text-success">{{ zone.enabled_record_count }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <select name="type" class="form-select form-select-sm">
+                    <option value="">全部类型</option>
+                    {% for v, l in record_types %}
+                        <option value="{{ v }}" {% if type_filter == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="search" value="{{ search }}" 
+                       class="form-control form-control-sm" placeholder="搜索记录名或值...">
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    <option value="enabled" {% if status_filter == 'enabled' %}selected{% endif %}>启用</option>
+                    <option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>禁用</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 筛选</button>
+                <a href="{% url 'dnsmgr:zone_detail' zone.pk %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 记录列表 -->
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>记录名称</th>
+                    <th>类型</th>
+                    <th>记录值</th>
+                    <th width="60">优先级</th>
+                    <th>TTL</th>
+                    <th>关联IP</th>
+                    <th>状态</th>
+                    <th width="140">关联探测任务</th>
+                    <th width="80">生效检测</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr id="record-row-{{ record.pk }}">
+                    <td><strong>{{ record.name }}</strong></td>
+                    <td><code>{{ record.record_type }}</code></td>
+                    <td class="text-truncate" style="max-width: 180px;">{{ record.value|truncatechars:40 }}</td>
+                    <td class="text-center small">{% if record.priority != 0 %}<span class="badge bg-info text-dark">{{ record.priority }}{% else %}<span class="text-muted">-{% endif %}</span></td>
+                    <td class="small">{{ record.ttl }}s</td>
+                    <td><code>{{ record.linked_ip|default:"-" }}</code></td>
+                    <td>
+                        {% if record.display_status == 'enabled' %}
+                            <span class="badge bg-success">启用</span>
+                        {% elif record.display_status == 'disabled' %}
+                            <span class="badge bg-secondary">禁用</span>
+                        {% elif record.display_status == 'invalid' %}
+                            <span class="badge bg-danger">无效</span>
+                        {% else %}
+                            <span class="badge bg-light text-dark">{{ record.display_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if record.probe_port %}
+                            {% if record.probe_task_name %}
+                            <div class="d-flex flex-column gap-1 small">
+                                <div class="fw-bold text-truncate" title="{{ record.probe_task_name }} ({{ record.probe_task_target }}:{{ record.probe_port }})">
+                                    {{ record.probe_task_name }}
+                                </div>
+                                {% if record.probe_last_status == 'reachable' %}
+                                <span class="badge bg-success w-100 justify-content-center"><i class="bi bi-check-circle me-1"></i>可达</span>
+                                {% elif record.probe_last_status in 'timeout unreachable refused dns_fail error' %}
+                                <span class="badge bg-danger w-100 justify-content-center"><i class="bi bi-x-circle me-1"></i>{{ record.probe_last_status|upper }}</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark w-100 justify-content-center">检测中...</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <code>{{ record.probe_port }}</code>
+                            {% if record.probe_last_status == 'reachable' %}
+                            <span class="badge bg-success ms-1">有效</span>
+                            {% elif record.probe_last_status in 'timeout unreachable refused dns_fail error' %}
+                            <span class="badge bg-danger ms-1">无效</span>
+                            {% endif %}
+                            {% endif %}
+                        {% elif record.status == 'invalid' %}
+                            <span class="badge bg-danger">无探测 · 已标记无效</span>
+                        {% else %}
+                            <span class="text-muted small">未关联</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if record.record_type == 'A' or record.record_type == 'CNAME' or record.record_type == 'AAAA' or record.record_type == 'MX' %}
+                        <button type="button" class="btn btn-xs btn-outline-info resolve-btn"
+                                data-record-id="{{ record.pk }}"
+                                onclick="runResolveTest({{ record.pk }}, this)"
+                                title="测试此记录的DNS解析">
+                            <i class="bi bi-broadcast-pin"></i>
+                        </button>
+                        <span id="resolve-badge-{{ record.pk }}" class="d-none small"></span>
+                        {% else %}
+                        <span class="text-muted" style="font-size:11px">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'dnsmgr:record_edit' record.pk %}" class="btn btn-sm btn-outline-primary">编辑</a>
+                        <a href="{% url 'dnsmgr:toggle_record' record.pk %}" class="btn btn-sm btn-outline-warning">
+                            {% if record.status == 'enabled' %}禁用{% else %}启用{% endif %}
+                        </a>
+                        <a href="{% url 'dnsmgr:record_delete' record.pk %}" class="btn btn-sm btn-outline-danger">删除</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="10" class="text-center py-4 text-muted">暂无DNS记录，请点击"新增记录"</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 解析测试结果模态框 -->
+<div class="modal fade" id="resolveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info bg-opacity-10">
+                <h5 class="modal-title"><i class="bi bi-broadcast-pin me-2"></i>DNS解析测试结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="resolveModalBody">
+                <!-- 动态填充 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新增记录模态框 -->
+<div class="modal fade" id="addRecordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary bg-opacity-10">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-1"></i>新增DNS记录</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addRecordForm" method="post" action="{% url 'dnsmgr:record_create' %}?zone={{ zone.pk }}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="zone" value="{{ zone.pk }}">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">记录名称 <span class="text-danger">*</span></label>
+                            <input type="text" name="name" id="ar_name" class="form-control"
+                                   placeholder="例如: www 或 @ 表示根" required>
+                            <small class="text-muted d-block mt-1">@ 表示根域名</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">记录类型 <span class="text-danger">*</span></label>
+                            <select name="record_type" id="ar_record_type" class="form-select" required>
+                                {% for v, l in record_types %}
+                                    <option value="{{ v }}">{{ l }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-12 mt-2">
+                            <label class="form-label fw-bold">记录值 <span class="text-danger">*</span></label>
+                            <textarea name="value" id="ar_value" class="form-control" rows="2"
+                                      placeholder="A记录填IP地址，CNAME填目标域名..." required></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">关联IP (仅A/AAAA)</label>
+                            <input type="text" name="linked_ip" id="ar_linked_ip" class="form-control"
+                                   placeholder="仅A/AAAA记录需要填写">
+                        </div>
+                        <div class="col-md-6">
+                            <hr class="my-1">
+                            <h6 class="text-primary mb-1"><i class="bi bi-radar me-1"></i>关联服务探测任务 <small class="text-muted">(可选)</small></h6>
+                            <select class="form-select form-select-sm" id="ar_probe_select" onchange="onArProbeChange()">
+                                <option value="">-- 不关联 --</option>
+                                {% for task in probe_tasks %}
+                                <option value="{{ task.port }}" data-target="{{ task.target }}">
+                                    {{ task.name }} ({{ task.target }}:{{ task.port }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <input type="number" name="probe_port" id="ar_probe_port" hidden min="1" max="65535">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">TTL(秒)</label>
+                            <input type="number" name="ttl" class="form-control" value="3600">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">优先级(MX)</label>
+                            <input type="number" name="priority" class="form-control" value="0" placeholder="MX记录优先级">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">状态</label>
+                            <select name="status" class="form-select">
+                                <option value="enabled" selected>启用</option>
+                                <option value="disabled">禁用</option>
+                            </select>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">备注/描述</label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="可选备注"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- 错误提示区域 -->
+                    <div id="arErrorArea" class="alert alert-danger py-2 px-3 mt-2 d-none"></div>
+                    <!-- 成功提示 -->
+                    <div id="arSuccessArea" class="alert alert-success py-2 px-3 mt-2 d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="arSubmitBtn">
+                        <i class="bi bi-check-lg me-1"></i>创建记录
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.resolve-badge-ok { color: #198754; font-weight: 600; }
+.resolve-badge-fail { color: #dc3545; font-weight: 600; }
+.resolve-badge-warn { color: #ffc107; font-weight: 600; }
+</style>
+
+<script>
+function getCSRFToken() {
+    var meta = document.querySelector('[name=csrfmiddlewaretoken]');
+    return meta ? meta.value : '';
+}
+
+// ========== 智能DNS解析测试 ==========
+var resolveModal;
+
+function runResolveTest(recordId, btnEl) {
+    if (!resolveModal) resolveModal = new bootstrap.Modal(document.getElementById('resolveModal'));
+
+    // 按钮状态
+    btnEl.disabled = true;
+    var origHTML = btnEl.innerHTML;
+    btnEl.innerHTML = '<span class="spinner-border spinner-border-xs" role="status"></span>';
+    
+    // 行高亮
+    document.getElementById('record-row-' + recordId).classList.add('table-warning');
+
+    fetch('{% url "dnsmgr:dns_resolve_test" %}?record_id=' + recordId, {
+        method: 'GET',
+        headers: {'X-CSRFToken': getCSRFToken()}
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        // 恢复按钮
+        btnEl.disabled = false;
+        btnEl.innerHTML = origHTML;
+        document.getElementById('record-row-' + recordId).classList.remove('table-warning');
+
+        // 更新行内徽章
+        updateResolveBadge(recordId, data);
+
+        // 填充模态框
+        fillResolveModal(data);
+
+        // 显示结果
+        resolveModal.show();
+    })
+    .catch(function(err) {
+        btnEl.disabled = false;
+        btnEl.innerHTML = origHTML;
+        alert('解析测试请求失败: ' + err.message);
+    });
+}
+
+function updateResolveBadge(recordId, data) {
+    var badge = document.getElementById('resolve-badge-' + recordId);
+    if (!badge) return;
+    
+    badge.classList.remove('d-none');
+    
+    if (data.effective) {
+        badge.className = 'resolve-badge-ok';
+        badge.innerHTML = '<i class="bi bi-check-circle-fill"></i> 生效';
+    } else if (!data.dns_service_running) {
+        badge.className = 'resolve-badge-warn';
+        badge.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> 未运行';
+    } else {
+        badge.className = 'resolve-badge-fail';
+        badge.innerHTML = '<i class="bi bi-x-circle-fill"></i> 未生效';
+    }
+}
+
+function fillResolveModal(data) {
+    var body = document.getElementById('resolveModalBody');
+    
+    // 生效状态卡片
+    var effectiveClass = data.effective ? 'bg-success text-white' : (data.dns_service_running ? 'bg-danger text-white' : 'bg-warning text-dark');
+    var effectiveIcon = data.effective ? 'check-circle' : (data.dns_service_running ? 'x-circle' : 'exclamation-triangle');
+    var effectiveText = data.effective ? '记录已生效' : (data.dns_service_running ? '记录未生效' : 'DNS服务未运行');
+
+    var html = 
+        '<!-- 总体状态 -->' +
+        '<div class="card mb-3 border-0 ' + effectiveClass + '">' +
+        '  <div class="card-body py-3 text-center">' +
+        '    <i class="bi bi-' + effectiveIcon + ' fs-1 d-block mb-1"></i>' +
+        '    <strong>' + effectiveText + '</strong><br>' +
+        '    <small>' + (data.effective_reason || '') + '</small>' +
+        '  </div>' +
+        '</div>' +
+
+        '<!-- 基本信息 -->' +
+        '<div class="row g-3 mb-3">' +
+        '  <div class="col-sm-6"><div class="p-2 rounded bg-light"><small class="text-muted">域名</small><br><code class="fw-bold">' + data.domain + '</code></div></div>' +
+        '  <div class="col-sm-6"><div class="p-2 rounded bg-light"><small class="text-muted">类型</small><br><code class="fw-bold">' + data.type + '</code></div></div>' +
+        '</div>' +
+
+        '<!-- 测试详情 -->' +
+        '<h6 class="fw-bold mb-2"><i class="bi bi-table me-1"></i> 解析测试详情</h6>' +
+        '<div class="table-responsive"><table class="table table-sm table-bordered mb-0">' +
+        '  <thead class="table-light"><tr><th>测试来源</th><th>响应码</th><th>解析结果</th><th>延迟</th></tr></thead>' +
+        '  <tbody>';
+
+    if (data.test_results && data.test_results.length > 0) {
+        data.test_results.forEach(function(t) {
+            var rcClass = t.rcode === 0 ? 'text-success' : (t.rcode === 3 ? 'text-warning' : 'text-danger');
+            var answersHtml = t.answers && t.answers.length > 0
+                ? t.answers.map(function(a) { return '<code class="me-1">' + a + '</code>'; }).join('')
+                : '<span class="text-muted">-</span>';
+            html += 
+                '<tr>' +
+                '  <td><strong>' + t.source + '</strong></td>' +
+                '  <td class="' + rcClass + '">' + t.rcname + '</td>' +
+                '  <td>' + answersHtml + '</td>' +
+                '  <td>' + (t.latency_ms >= 0 ? t.latency_ms + 'ms' : '-') + '</td>' +
+                '</tr>';
+        });
+    }
+
+    html += 
+        '  </tbody>' +
+        '</table></div>';
+
+    body.innerHTML = html;
+}
+
+// ========== 新增记录模态框 ============
+function onArProbeChange() {
+    var sel = document.getElementById('ar_probe_select');
+    var hiddenPort = document.getElementById('ar_probe_port');
+    if (sel.value) {
+        hiddenPort.value = sel.value;
+    } else {
+        hiddenPort.value = '';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.getElementById('addRecordForm');
+    if (!form) return;
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var btn = document.getElementById('arSubmitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>创建中...';
+
+        var errorArea = document.getElementById('arErrorArea');
+        var successArea = document.getElementById('arSuccessArea');
+        errorArea.classList.add('d-none');
+        successArea.classList.add('d-none');
+
+        fetch(form.action, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCSRFToken()},
+            body: new FormData(form)
+        })
+        .then(function(r) {
+            if (r.redirected || r.status === 302) {
+                // 创建成功，重定向到区域详情
+                successArea.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>记录创建成功！页面即将刷新...';
+                successArea.classList.remove('d-none');
+                setTimeout(function() { location.reload(); }, 800);
+                return null;
+            }
+            return r.text().then(function(text) {
+                try { return JSON.parse(text); }
+                catch(ex) { return {html: text}; }
+            });
+        })
+        .then(function(data) {
+            if (!data) return; // 成功重定向
+
+            // 解析错误
+            if (data.html && data.html.indexOf('alert-danger') !== -1) {
+                // 从HTML提取错误信息
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(data.html, 'text/html');
+                var errors = doc.querySelectorAll('.alert-danger, .text-danger, .has-error');
+                var msgs = [];
+                errors.forEach(function(el) { msgs.push(el.textContent.trim()); });
+                if (msgs.length === 0) msgs.push('表单验证失败，请检查输入内容');
+                errorArea.innerHTML = '<strong>创建失败：</strong><br>' + msgs.join('<br>');
+                errorArea.classList.remove('d-none');
+            } else if (data.error) {
+                errorArea.innerHTML = '<strong>创建失败：</strong>' + data.error;
+                errorArea.classList.remove('d-none');
+            } else {
+                // 可能是其他情况，尝试刷新
+                location.reload();
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>创建记录';
+        })
+        .catch(function(err) {
+            errorArea.innerHTML = '<strong>请求失败：</strong>' + err.message;
+            errorArea.classList.remove('d-none');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>创建记录';
+        });
+    });
+});
+</script>
+{% endblock %}

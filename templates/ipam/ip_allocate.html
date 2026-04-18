@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}分配IP - {{ ip.ip_address }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-pci-card"></i> 分配IP地址</h4>
+    <a href="{% url 'ipam:ip_list' %}" class="btn btn-outline-secondary btn-sm">返回列表</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">IP信息</div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr><td width="100">IP地址:</td><td><code>{{ ip.ip_address }}</code></td></tr>
+                    <tr><td>所属子网:</td><td>{{ ip.subnet.name }} ({{ ip.subnet.cidr }})</td></tr>
+                    <tr><td>当前状态:</td>
+                        <td><span class="badge rounded-pill status-{{ ip.status }}">{{ ip.get_status_display }}</span></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">分配信息</div>
+            <div class="card-body">
+                <form method="post" novalidate>{% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">主机名</label>
+                        {{ form.hostname }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">设备名称</label>
+                        {{ form.device_name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">MAC地址</label>
+                        {{ form.mac_address }}
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">使用人</label>
+                            {{ form.owner }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">部门</label>
+                            {{ form.department }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">设备类型</label>
+                        {{ form.device_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">绑定方式</label>
+                        {{ form.binding_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        {{ form.notes }}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> 确认分配</button>
+                    <a href="{% url 'ipam:ip_list' %}" class="btn btn-secondary">取消</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

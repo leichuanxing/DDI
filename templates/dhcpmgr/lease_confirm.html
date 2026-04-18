@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}确认释放租约{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-warning shadow-sm mt-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="m-0"><i class="bi bi-arrow-counterclockwise me-2"></i>确认释放租约</h5>
+            </div>
+            <div class="card-body text-center py-4">
+                <p>确定要释放以下DHCP租约吗？</p>
+                <div class="bg-light rounded p-3 mb-3">
+                    <strong>{{ lease.ip_address }}</strong><br>
+                    <small class="text-muted">
+                        MAC: {{ lease.mac_address }} |
+                        主机名: {{ lease.hostname|default:"-" }} |
+                        状态: {{ lease.get_status_display }}
+                    </small><br>
+                    <small class="text-muted">
+                        租期: {{ lease.start_time|date:"Y-m-d H:i" }} ~ {{ lease.end_time|date:"Y-m-d H:i" }}
+                    </small>
+                </div>
+                <p class="text-warning small mb-3"><i class="bi bi-exclamation-circle me-1"></i>释放后该IP将重新进入地址池可分配！</p>
+
+                <form method="post" action="{% url 'dhcpmgr:lease_release' lease.pk %}" class="d-inline">{% csrf_token %}
+                    <a href="{% url 'dhcpmgr:lease_list' %}" class="btn btn-secondary me-2">取消</a>
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-arrow-counterclockwise me-1"></i>确认释放</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

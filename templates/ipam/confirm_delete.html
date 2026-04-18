@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}确认删除{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-exclamation-triangle text-warning"></i> 确认删除</h4>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-exclamation-octagon fs-1 text-danger d-block mb-3"></i>
+                <h5>确认删除此记录？</h5>
+                <p class="text-muted">{{ object }}</p>
+                
+                <form method="post">{% csrf_token %}
+                    <button type="submit" class="btn btn-danger me-2"><i class="bi bi-trash"></i> 确认删除</button>
+                    <a href="javascript:history.back()" class="btn btn-secondary"><i class="bi bi-x-lg"></i> 取消</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

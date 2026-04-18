@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}操作日志{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-journal-text"></i> 操作审计日志</h4>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <select name="module" class="form-select form-select-sm">
+                    <option value="">全部模块</option>
+                    {% for v, l in modules %}
+                        <option value="{{ v }}" {% if current_module == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="action" class="form-select form-select-sm">
+                    <option value="">全部操作</option>
+                    {% for v, l in actions %}
+                        <option value="{{ v }}" {% if current_action == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 flex-grow-1">
+                <input type="text" name="search" value="{{ search }}" 
+                       class="form-control form-control-sm" placeholder="搜索对象或变更内容...">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 筛选</button>
+                <a href="{% url 'logs:operation_log' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>时间</th><th>操作人</th><th>模块</th><th>操作类型</th>
+                    <th>对象类型</th><th>变更前内容</th><th>变更后内容</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="small whitespace-nowrap">{{ log.operation_time|date:"Y-m-d H:i:s" }}</td>
+                    <td>{{ log.user.username|default:"系统" }}</td>
+                    <td><span class="badge bg-light text-dark">{{ log.module }}</span></td>
+                    <td>{{ log.action }}</td>
+                    <td>{{ log.object_type }}</td>
+                    <td class="text-truncate small text-muted" style="max-width: 150px;" title="{{ log.old_value }}">
+                        {{ log.old_value|truncatechars:25|default:"-" }}
+                    </td>
+                    <td class="text-truncate small" style="max-width: 250px;" title="{{ log.new_value }}">
+                        {{ log.new_value|truncatechars:40|default:"-" }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center py-4 text-muted">暂无操作日志</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if is_paginated %}
+        <div class="card-footer">
+            <nav class="d-flex justify-content-center"><ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">上一页</a></li>{% endif %}
+                <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">下一页</a></li>{% endif %}
+            </ul></nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

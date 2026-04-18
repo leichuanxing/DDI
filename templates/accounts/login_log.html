@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}登录日志{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-clock-history"></i> 登录日志</h4>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" name="search" value="{{ request.GET.search }}" 
+                       class="form-control form-control-sm" placeholder="搜索用户名...">
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部结果</option>
+                    <option value="success">成功</option>
+                    <option value="failed">失败</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 筛选</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>登录时间</th><th>用户名</th><th>登录IP</th><th>结果</th><th>消息</th><th>User-Agent</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="small">{{ log.login_time|date:"Y-m-d H:i:s" }}</td>
+                    <td>{{ log.username }}</td>
+                    <td><code>{{ log.ip_address }}</code></td>
+                    <td>
+                        <span class="badge rounded-pill {% if log.status == 'success' %}bg-success{% else %}bg-danger{% endif %}">
+                            {% if log.status == 'success' %}成功{% else %}失败{% endif %}
+                        </span>
+                    </td>
+                    <td class="small">{{ log.message|truncatechars:20 }}</td>
+                    <td class="small text-truncate" style="max-width: 200px;" title="{{ log.user_agent }}">{{ log.user_agent|truncatechars:30 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center py-4 text-muted">暂无登录记录</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if is_paginated %}
+        <div class="card-footer">
+            <nav class="d-flex justify-content-center"><ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">上一页</a></li>{% endif %}
+                <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">下一页</a></li>{% endif %}
+            </ul></nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

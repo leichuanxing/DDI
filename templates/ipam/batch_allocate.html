@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}批量分配IP{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-collection"></i> 批量分配IP</h4>
+    <a href="{% url 'ipam:subnet_detail' subnet.pk %}" class="btn btn-outline-secondary btn-sm">返回子网</a>
+</div>
+
+<div class="alert alert-info">
+    子网: <strong>{{ subnet.name }} ({{ subnet.cidr }})</strong> | 
+    可用IP数: <strong>{{ available_ips|length }}</strong>
+</div>
+
+<div class="row">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">批量分配设置</div>
+            <div class="card-body">
+                <form method="post">{% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">起始IP <span class="text-danger">*</span></label>
+                        {{ form.start_ip }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">结束IP <span class="text-danger">*</span></label>
+                        {{ form.end_ip }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">设备类型（统一）</label>
+                        {{ form.device_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">部门（统一）</label>
+                        {{ form.department }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        {{ form.notes }}
+                    </div>
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-collection"></i> 执行批量分配</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header">可用IP列表 (前50个)</div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light"><tr><th>#</th><th>IP地址</th></tr></thead>
+                    <tbody>
+                        {% for ip in available_ips %}
+                            <tr><td>{{ forloop.counter }}</td><td><code>{{ ip.ip_address }}</code></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

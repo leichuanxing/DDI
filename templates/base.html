@@ -1,0 +1,544 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}合力数据DDI管理系统{% endblock %} - 合力数据 DDI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --sidebar-width: 240px;
+            --sidebar-collapsed: 60px;
+            --header-height: 56px;
+            --primary-dark: #1a365d;
+            --primary: #2c5282;
+            --primary-light: #3182ce;
+            --accent: #4fd1c5;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
+            background-color: #f0f2f5;
+        }
+
+        /* ====== 侧边栏 ====== */
+        .sidebar {
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            width: var(--sidebar-width);
+            background: var(--primary-dark);
+            color: rgba(255,255,255,0.9);
+            z-index: 1040;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 品牌区域 */
+        .sidebar-brand {
+            height: var(--header-height);
+            min-height: var(--header-height);
+            padding: 0 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .sidebar-brand .brand-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+            color: var(--accent);
+        }
+        .sidebar-brand .brand-text {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .sidebar-brand h6 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 16px;
+            line-height: 1.3;
+        }
+        .sidebar-brand small {
+            font-size: 12px;
+            opacity: 0.55;
+            letter-spacing: 0.5px;
+        }
+
+        /* 菜单容器（可滚动） */
+        .sidebar-menu {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 10px 0;
+        }
+        .sidebar-menu::-webkit-scrollbar { width: 3px; }
+        .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+        /* ====== 一级菜单（可折叠分组） ====== */
+        .menu-group {
+            margin-bottom: 2px;
+        }
+        .menu-header {
+            display: flex;
+            align-items: center;
+            padding: 11px 18px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s ease;
+            border-left: 3px solid transparent;
+            position: relative;
+        }
+        .menu-header:hover {
+            background: rgba(255,255,255,0.07);
+        }
+        .menu-header.active {
+            background: rgba(79,209,197,0.12);
+            border-left-color: var(--accent);
+        }
+        .menu-header i.menu-icon {
+            font-size: 19px;
+            width: 24px;
+            text-align: center;
+            flex-shrink: 0;
+            opacity: 0.85;
+        }
+        .menu-header .menu-title {
+            flex: 1;
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .menu-header i.arrow {
+            font-size: 11px;
+            transition: transform 0.25s ease;
+            opacity: 0.5;
+            flex-shrink: 0;
+        }
+        .menu-header[aria-expanded="true"] i.arrow {
+            transform: rotate(90deg);
+        }
+        .menu-header[aria-expanded="true"].active {
+            background: rgba(79,209,197,0.15);
+        }
+
+        /* ====== 二级菜单（子项） ====== */
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        .submenu-item {
+            display: block;
+            padding: 10px 18px 10px 56px;
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            font-size: 14.5px;
+            transition: all 0.15s ease;
+            border-left: 3px solid transparent;
+            position: relative;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .submenu-item::before {
+            content: '';
+            position: absolute;
+            left: 36px;
+            top: 50%;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-50%);
+            transition: all 0.15s ease;
+        }
+        .submenu-item:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.05);
+            padding-left: 59px;
+        }
+        .submenu-item:hover::before {
+            background: var(--accent);
+            box-shadow: 0 0 6px var(--accent);
+        }
+        .submenu-item.current {
+            color: #fff;
+            background: rgba(79,209,197,0.12);
+            border-left-color: var(--accent);
+            font-weight: 600;
+        }
+        .submenu-item.current::before {
+            background: var(--accent);
+            box-shadow: 0 0 6px var(--accent);
+        }
+
+        /* 分割线 */
+        .menu-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.06);
+            margin: 8px 16px;
+        }
+
+        /* 底部用户区 */
+        .sidebar-footer {
+            padding: 12px 16px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .user-mini {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+        .user-avatar {
+            width: 32px; height: 32px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent), #38b2ac);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .user-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 140px;
+        }
+        .user-role {
+            font-size: 10.5px;
+            opacity: 0.5;
+        }
+
+        /* ====== 主内容区 ====== */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 顶部栏 */
+        .top-header {
+            height: var(--header-height);
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+            flex-shrink: 0;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .breadcrumb-nav {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        /* 页面内容 */
+        .page-content {
+            padding: 24px;
+            flex: 1;
+        }
+
+        /* 卡片样式增强 */
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border-radius: 10px;
+        }
+        .card-header {
+            background-color: #fafbfc;
+            border-bottom: 1px solid #eef2f7;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        /* 统计卡片 */
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-value { font-size: 26px; font-weight: 700; line-height: 1.2; }
+
+        /* 状态标签 */
+        .status-available { background-color: #d4edda; color: #155724; }
+        .status-allocated { background-color: #cce5ff; color: #004085; }
+        .status-reserved { background-color: #fff3cd; color: #856404; }
+        .status-conflict { background-color: #f8d7da; color: #721c24; }
+        .status-disabled { background-color: #e2e3e5; color: #383d41; }
+        .status-enabled { background-color: #d4edda; color: #155724; }
+
+        /* 表格优化 */
+        .table th { font-weight: 600; color: #495057; font-size: 13px; border-bottom-width: 1px; }
+        .table td { vertical-align: middle; font-size: 13.5px; }
+
+        /* 表单优化 */
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 0.2rem rgba(49,130,206,0.15);
+        }
+
+        /* 面包屑 */
+        .breadcrumb { background: transparent; padding: 0; margin-bottom: 0; font-size: 13px; }
+        .breadcrumb-item a { color: var(--primary); text-decoration: none; }
+        .breadcrumb-item a:hover { color: var(--primary-light); }
+
+        /* 分页 */
+        .pagination .page-link { color: var(--primary); font-size: 13px; }
+        .pagination .page-item.active .page-link { background-color: var(--primary); border-color: var(--primary); }
+
+        /* 折叠动画 */
+        .collapse:not(.show) { display: none; }
+        .collapsing { height: 0; overflow: hidden; transition: height 0.3s ease-in-out; }
+        .collapse.showing { height: auto; transition: height 0.3s ease-in-out; }
+
+        /* 响应式 */
+        @media (max-width: 992px) {
+            .sidebar { width: var(--sidebar-collapsed); }
+            .sidebar-brand .brand-text,
+            .menu-header .menu-title,
+            .submenu-item span,
+            .sidebar-footer .user-name,
+            .sidebar-footer .user-role,
+            .menu-header i.arrow,
+            .menu-divider { display: none !important; }
+            .menu-header { justify-content: center; padding: 12px 0; }
+            .submenu-item { padding: 10px 0; text-align: center; border-left: none; }
+            .submenu-item::before { display: none; }
+            .main-content { margin-left: var(--sidebar-collapsed); }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    {% if user.is_authenticated %}
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <!-- 品牌 -->
+        <div class="sidebar-brand">
+            <i class="bi bi-hdd-network brand-icon"></i>
+            <div class="brand-text">
+                <h6>合力数据DDI</h6>
+                <small>Network Management</small>
+            </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="sidebar-menu">
+
+            <!-- === 概览 === -->
+            <div class="menu-group">
+                <div class="menu-header {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}"
+                     data-bs-toggle="collapse"
+                     aria-expanded="{% if request.resolver_match.app_name == 'dashboard' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-speedometer2 menu-icon"></i>
+                    <span class="menu-title">概览</span>
+                    <i class="bi bi-chevron-right arrow"></i>
+                </div>
+                <div class="submenu collapse {% if request.resolver_match.app_name == 'dashboard' %}show{% endif %}">
+                    <a href="{% url 'dashboard:index' %}" class="submenu-item {% if request.resolver_match.app_name == 'dashboard' %}current{% endif %}">
+                        <span>首页仪表盘</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- === IP地址管理 === -->
+            <div class="menu-group">
+                <div class="menu-header {% if request.resolver_match.app_name == 'ipam' %}active{% endif %}"
+                     data-bs-toggle="collapse"
+                     aria-expanded="{% if request.resolver_match.app_name == 'ipam' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-diagram-3 menu-icon"></i>
+                    <span class="menu-title">IP 地址管理</span>
+                    <i class="bi bi-chevron-right arrow"></i>
+                </div>
+                <div class="submenu collapse {% if request.resolver_match.app_name == 'ipam' %}show{% endif %}">
+                    <a href="{% url 'ipam:region_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'region_list' or request.resolver_match.url_name == 'region_create' or request.resolver_match.url_name == 'region_edit' or request.resolver_match.url_name == 'region_delete' %}current{% endif %}"><span>区域管理</span></a>
+                    <a href="{% url 'ipam:vlan_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'vlan_list' or request.resolver_match.url_name == 'vlan_create' or request.resolver_match.url_name == 'vlan_edit' or request.resolver_match.url_name == 'vlan_delete' %}current{% endif %}"><span>VLAN 管理</span></a>
+                    <a href="{% url 'ipam:subnet_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'subnet_list' or request.resolver_match.url_name == 'subnet_create' or request.resolver_match.url_name == 'subnet_detail' or request.resolver_match.url_name == 'subnet_edit' or request.resolver_match.url_name == 'subnet_delete' or request.resolver_match.url_name == 'batch_allocate' %}current{% endif %}"><span>子网管理</span></a>
+                    <a href="{% url 'ipam:ip_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ip_list' or request.resolver_match.url_name == 'ip_allocate' or request.resolver_match.url_name == 'ip_release' or request.resolver_match.url_name == 'ip_set_status' %}current{% endif %}"><span>IP 地址</span></a>
+                    <a href="{% url 'ipam:scan_index' %}" class="submenu-item {% if request.resolver_match.url_name == 'scan_index' or request.resolver_match.url_name == 'scan_create' or request.resolver_match.url_name == 'scan_detail' or request.resolver_match.url_name == 'scan_execute' or request.resolver_match.url_name == 'scan_progress' or request.resolver_match.url_name == 'scan_cancel' or request.resolver_match.url_name == 'scan_export' or request.resolver_match.url_name == 'scan_delete' or request.resolver_match.url_name == 'probe_history' or request.resolver_match.url_name == 'discovery_rules' or request.resolver_match.url_name == 'live_topology' %}current{% endif %}"
+                       style="{% if request.resolver_match.url_name == 'scan_index' or request.resolver_match.url_name == 'scan_create' or request.resolver_match.url_name == 'scan_detail' or request.resolver_match.url_name == 'scan_execute' or request.resolver_match.url_name == 'scan_progress' or request.resolver_match.url_name == 'scan_cancel' or request.resolver_match.url_name == 'scan_export' or request.resolver_match.url_name == 'scan_delete' or request.resolver_match.url_name == 'probe_history' or request.resolver_match.url_name == 'discovery_rules' or request.resolver_match.url_name == 'live_topology' %}color:#4fd1c5;font-weight:600;{% endif %}">
+                        <span><i class="bi bi-radar me-1"></i>网络探测</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- === DNS 管理 === -->
+            <div class="menu-group">
+                <div class="menu-header {% if request.resolver_match.app_name == 'dnsmgr' %}active{% endif %}"
+                     data-bs-toggle="collapse"
+                     aria-expanded="{% if request.resolver_match.app_name == 'dnsmgr' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-globe menu-icon"></i>
+                    <span class="menu-title">DNS 管理</span>
+                    <i class="bi bi-chevron-right arrow"></i>
+                </div>
+                <div class="submenu collapse {% if request.resolver_match.app_name == 'dnsmgr' %}show{% endif %}">
+                    <a href="{% url 'dnsmgr:dns_service' %}" class="submenu-item {% if request.resolver_match.url_name == 'dns_service' or request.resolver_match.url_name == 'dns_resolve_test' %}current{% endif %}"><span>DNS 服务</span></a>
+                    <a href="{% url 'dnsmgr:zone_list' %}" class="submenu-item {%if request.resolver_match.url_name == 'zone_list' or request.resolver_match.url_name == 'zone_create' or request.resolver_match.url_name == 'zone_detail' or request.resolver_match.url_name == 'zone_edit' or request.resolver_match.url_name == 'zone_delete' or request.resolver_match.url_name == 'record_list' or request.resolver_match.url_name == 'record_create' or request.resolver_match.url_name == 'record_edit' or request.resolver_match.url_name == 'record_delete' or request.resolver_match.url_name == 'toggle_record' %}current{% endif %}"><span>区域与记录</span></a>
+                    <a href="{% url 'dnsmgr:service_probe' %}" class="submenu-item {%if request.resolver_match.url_name == 'service_probe' or request.resolver_match.url_name == 'service_probe_api' or request.resolver_match.url_name == 'probe_task_list' or request.resolver_match.url_name == 'probe_task_create' or request.resolver_match.url_name == 'probe_task_update' or request.resolver_match.url_name == 'probe_task_delete' %}current{% endif %}"><span>服务探测</span></a>
+                    <a href="{% url 'dnsmgr:query_log' %}" class="submenu-item {%if request.resolver_match.url_name == 'query_log' or request.resolver_match.url_name == 'query_log_clear' %}current{% endif %}"><span>解析日志</span></a>
+                </div>
+            </div>
+
+            <!-- === DHCP 管理 === -->
+            <div class="menu-group">
+                <div class="menu-header {% if request.resolver_match.app_name == 'dhcpmgr' %}active{% endif %}"
+                     data-bs-toggle="collapse"
+                     aria-expanded="{% if request.resolver_match.app_name == 'dhcpmgr' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-wifi menu-icon"></i>
+                    <span class="menu-title">DHCP 管理</span>
+                    <i class="bi bi-chevron-right arrow"></i>
+                </div>
+                <div class="submenu collapse {%if request.resolver_match.app_name == 'dhcpmgr' %}show{% endif %}">
+                    <a href="{% url 'dhcpmgr:pool_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'pool_list' or request.resolver_match.url_name == 'pool_create' or request.resolver_match.url_name == 'pool_detail' or request.resolver_match.url_name == 'pool_edit' or request.resolver_match.url_name == 'pool_delete' or request.resolver_match.url_name == 'toggle_pool' or request.resolver_match.url_name == 'exclusion_create' or request.resolver_match.url_name == 'exclusion_edit' or request.resolver_match.url_name == 'exclusion_delete' %}current{% endif %}"><span>地址池</span></a>
+                    <a href="{% url 'dhcpmgr:lease_list' %}" class="submenu-item {%if request.resolver_match.url_name == 'lease_list' or request.resolver_match.url_name == 'lease_create' or request.resolver_match.url_name == 'lease_release' or request.resolver_match.url_name == 'check_expired' %}current{% endif %}"><span>租约管理</span></a>
+                    <a href="{% url 'dhcpmgr:service' %}" class="submenu-item {%if request.resolver_match.url_name == 'service' or request.resolver_match.url_name == 'service_start' or request.resolver_match.url_name == 'service_stop' or request.resolver_match.url_name == 'service_status' %}current{% endif %}"><span>服务状态</span></a>
+                </div>
+            </div>
+
+            <!-- === 设备管理 === -->
+            <div class="menu-group">
+                <div class="menu-header {% if request.resolver_match.app_name == 'devices' %}active{% endif %}"
+                     data-bs-toggle="collapse"
+                     aria-expanded="{% if request.resolver_match.app_name == 'devices' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-pc-display menu-icon"></i>
+                    <span class="menu-title">设备管理</span>
+                    <i class="bi bi-chevron-right arrow"></i>
+                </div>
+                <div class="submenu collapse {%if request.resolver_match.app_name == 'devices' %}show{% endif %}">
+                    <a href="{% url 'devices:device_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'device_list' or request.resolver_match.url_name == 'device_create' or request.resolver_match.url_name == 'device_detail' or request.resolver_match.url_name == 'device_edit' or request.resolver_match.url_name == 'device_delete' or request.resolver_match.url_name == 'link_ip' %}current{% endif %}"><span>设备主机</span></a>
+                </div>
+            </div>
+
+            <div class="menu-divider"></div>
+
+            <!-- === 系统管理 === -->
+            <div class="menu-group">
+                <div class="menu-header {% if request.resolver_match.app_name == 'logs' or request.resolver_match.app_name == 'accounts' %}active{% endif %}"
+                     data-bs-toggle="collapse"
+                     aria-expanded="{% if request.resolver_match.app_name == 'logs' or request.resolver_match.app_name == 'accounts' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-gear menu-icon"></i>
+                    <span class="menu-title">系统管理</span>
+                    <i class="bi bi-chevron-right arrow"></i>
+                </div>
+                <div class="submenu collapse {%if request.resolver_match.app_name == 'logs' or request.resolver_match.app_name == 'accounts' %}show{% endif %}">
+                    <a href="{% url 'logs:operation_log' %}" class="submenu-item {%if request.resolver_match.app_name == 'logs' %}current{% endif %}"><span>操作日志</span></a>
+                    {% if user.role.code == 'admin' or user.is_superuser %}
+                    <a href="{% url 'accounts:user_list' %}" class="submenu-item {%if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'logout' and request.resolver_match.url_name != 'login_log' %}current{% endif %}"><span>用户管理</span></a>
+                    {% endif %}
+                </div>
+            </div>
+
+        </nav>
+
+        <!-- 底部用户信息 -->
+        <div class="sidebar-footer">
+            <div class="user-mini">
+                <div class="user-avatar">
+                    <i class="bi bi-person-fill"></i>
+                </div>
+                <div class="user-name">
+                    <div>{{ user.real_name|default:user.username }}</div>
+                    <div class="user-role">{{ user.get_role_display }}</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <div class="main-content">
+        <!-- 顶部栏 -->
+        <header class="top-header">
+            <div class="header-left">
+            </div>
+            <div class="header-right">
+                <span style="font-size:13px;color:#6b7280;">
+                    <i class="bi bi-clock me-1"></i>{% now "Y-m-d H:i" %}
+                </span>
+                <a href="{% url 'accounts:logout' %}" class="btn btn-outline-secondary btn-sm" title="退出登录">
+                    <i class="bi bi-box-arrow-right me-1"></i>退出
+                </a>
+            </div>
+        </header>
+
+        <!-- 页面内容 -->
+        <main class="page-content">
+            {% if messages %}
+            <div id="messages-container" class="mb-3">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2 px-3 d-inline-flex align-items-center" role="alert" style="font-size:13px;">
+                    {{ message }}
+                    <button type="button" class="btn-close btn-sm py-0 ms-2" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+    {% block login_content %}{% endblock %}
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    {% block extra_js %}{% endblock %}
+    <!-- CSRF Token -->
+    {% csrf_token %}
+
+    <script>
+    // 侧边栏折叠交互增强：点击一级菜单标题时切换子菜单
+    document.querySelectorAll('.menu-header').forEach(function(header) {
+        header.addEventListener('click', function(e) {
+            // 找到对应的submenu
+            var submenu = this.nextElementSibling;
+            if (!submenu || !submenu.classList.contains('submenu')) return;
+
+            var expanded = this.getAttribute('aria-expanded') === 'true';
+            this.setAttribute('aria-expanded', String(!expanded));
+
+            if (!expanded) {
+                submenu.style.display = 'block';
+                submenu.classList.add('show');
+                submenu.style.height = 'auto';
+                var height = submenu.offsetHeight + 'px';
+                submenu.style.height = '0';
+                setTimeout(function() { submenu.style.height = height; }, 10);
+                setTimeout(function() {
+                    submenu.style.height = '';
+                    submenu.style.display = '';
+                }, 310);
+            } else {
+                submenu.style.height = submenu.offsetHeight + 'px';
+                setTimeout(function() { submenu.style.height = '0'; }, 10);
+                setTimeout(function() {
+                    submenu.classList.remove('show');
+                    submenu.style.display = '';
+                    submenu.style.height = '';
+                }, 300);
+            }
+        });
+    });
+    </script>
+</body>
+</html>

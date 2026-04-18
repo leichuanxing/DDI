@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}添加{% endif %}排除地址{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">{% if form.instance.pk %}编辑{% else %}添加{% endif %}排除地址段</h4>
+
+<div class="card" style="max-width: 600px;">
+    <div class="card-body">
+        <form method="post" novalidate>{% csrf_token %}
+            <div class="mb-3">
+                <label class="form-label fw-bold">所属地址池</label>
+                {{ form.pool }}
+            </div>
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label class="form-label fw-bold">起始IP</label>
+                    {{ form.start_ip }}
+                </div>
+                <div class="col-6">
+                    <label class="form-label fw-bold">结束IP</label>
+                    {{ form.end_ip }}
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">排除原因</label>
+                {{ form.reason }}
+            </div>
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                {{ form.notes }}
+            </div>
+            
+            {% if form.non_field_errors %}
+                {% for err in form.non_field_errors %}
+                    <div class="alert alert-warning">{{ err }}</div>
+                {% endfor %}
+            {% endif %}
+            
+            <button type="submit" class="btn btn-warning">保存</button>
+            <a href="javascript:history.back()" class="btn btn-secondary">返回</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

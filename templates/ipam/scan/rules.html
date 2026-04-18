@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}自动发现规则{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h4><i class="bi bi-gear-wide-connected me-2"></i>自动发现规则</h4>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ruleModal">
+                <i class="bi bi-plus-circle me-1"></i>新建规则
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                {% if rules %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr><th>规则名称</th><th>目标子网</th><th>扫描类型</th><th>调度周期</th><th>状态</th><th>上次执行</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for rule in rules %}
+                            <tr>
+                                <td><strong>{{ rule.name }}</strong></td>
+                                <td>{{ rule.subnet.cidr }}<br><small>{{ rule.subnet.name }}</small></td>
+                                <td>{{ rule.scan_types }}</td>
+                                <td>
+                                    <span class="badge bg-info text-dark">{{ rule.get_schedule_display }}</span>
+                                </td>
+                                <td>
+                                    {% if rule.is_active %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>启用</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">禁用</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ rule.last_run|date:"m-d H:i" }}|default:"-" }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="#" class="btn btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                                        <a href="#" class="btn btn-outline-success"><i class="bi bi-play-fill" title="立即执行"></i></a>
+                                        <a href="#" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="card-body text-center p-5 text-muted">
+                    <i class="bi bi-gear fs-1 d-block mb-2"></i>
+                    <p>暂无自动发现规则</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新建规则模态框 -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>新建自动发现规则</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">规则名称</label>
+                        <input type="text" name="name" class="form-control" placeholder="例如: 每日办公网巡检">
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">目标子网</label>
+                            <select name="subnet" class="form-select">
+                                {% for subnet in subnets %}
+                                <option value="{{ subnet.pk }}">{{ subnet.cidr }} - {{ subnet.name }}</option>
+                                {% empty %}
+                                <option value="">暂无子网，请先创建</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">调度周期</label>
+                            <select name="schedule" class="form-select">
+                                <option value="manual">手动触发</option>
+                                <option value="hourly">每小时</option>
+                                <option value="daily">每天 (00:00)</option>
+                                <option value="weekly">每周 (周一 00:00)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">扫描类型</label>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" name="scan_types" value="ping" checked class="form-check-input" id="st-ping">
+                            <label for="st-ping" class="form-check-label">Ping 探测</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" name="scan_types" value="port" class="form-check-input" id="st-port">
+                            <label for="st-port" class="form-check-label">端口扫描</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" name="scan_types" value="arp" class="form-check-input" id="st-arp">
+                            <label for="st-arp" class="form-check-label">ARP 扫描</label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">扫描端口（端口扫描时使用）</label>
+                        <input type="text" name="ports" class="form-control" value="22,80,443"
+                               placeholder="22,80,443 或 1-1024">
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" name="is_active" checked class="form-check-input" id="is-active">
+                        <label for="is-active" class="form-check-label">启用此规则</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveRule()">保存规则</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function saveRule() {
+    // TODO: 实现规则保存逻辑
+    alert('规则创建功能开发中...');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+
+{% block title %}IP地址管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-pci-network"></i> IP地址管理</h4>
+    <a href="{% url 'ipam:scan_index' %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-radar me-1"></i>网络探测
+    </a>
+</div>
+
+<!-- 快速探测工具栏 -->
+<div class="card mb-3 bg-light border-info">
+    <div class="card-body py-2">
+        <div class="row align-items-end g-2">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold"><i class="bi bi-broadcast-pin me-1"></i>快速 Ping 探测</label>
+                <input type="text" id="quick-ping-ip" class="form-control form-control-sm" placeholder="输入IP地址...">
+            </div>
+            <div class="col-auto">
+                <button type="button" onclick="doQuickPing()" class="btn btn-primary btn-sm" id="ping-btn">
+                    <i class="bi bi-send me-1"></i>Ping
+                </button>
+            </div>
+            <div class="col-md-4 ms-md-3" id="quick-ping-result-container">
+                <!-- 结果显示区域 -->
+                <small id="quick-ping-result" class="text-muted"></small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 搜索筛选 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" name="search" value="{{ search }}" 
+                       class="form-control form-control-sm" placeholder="搜索IP、主机名、MAC或设备名...">
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    {% for v, l in status_choices %}
+                        <option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="subnet" class="form-select form-select-sm">
+                    <option value="">全部子网</option>
+                    {% for s in subnets %}
+                        <option value="{{ s.pk }}" {% if subnet|stringformat:"s" == s.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ s.name }} ({{ s.cidr }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 搜索</button>
+                <a href="{% url 'ipam:ip_list' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>IP地址</th>
+                        <th>子网</th>
+                        <th>状态</th>
+                        <th>主机名</th>
+                        <th>设备名</th>
+                        <th>使用人</th>
+                        <th>MAC</th>
+                        <th>绑定方式</th>
+                        <th>更新时间</th>
+                        <th>操作</th>
+                        <th>探测</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip in ips %}
+                    <tr>
+                        <td><code>{{ ip.ip_address }}</code></td>
+                        <td>{{ ip.subnet.name|truncatechars:15 }}</td>
+                        <td>
+                            <span class="badge rounded-pill status-{{ ip.status }}">{{ ip.get_status_display }}</span>
+                        </td>
+                        <td>{{ ip.hostname|truncatechars:18 }}</td>
+                        <td>{{ ip.device_name|truncatechars:18 }}</td>
+                        <td>{{ ip.owner|default:"-" }}</td>
+                        <td><code>{{ ip.mac_address|truncatechars:14 }}</code></td>
+                        <td>{{ ip.get_binding_type_display }}</td>
+                        <td class="small">{{ ip.updated_at|date:"m-d H:i" }}</td>
+                        <td>
+                            {% if ip.status == 'available' %}
+                                <a href="{% url 'ipam:ip_allocate' ip.pk %}" class="btn btn-sm btn-outline-primary">分配</a>
+                            {% elif ip.status == 'allocated' %}
+                                <a href="{% url 'ipam:ip_release' ip.pk %}" class="btn btn-sm btn-outline-warning">释放</a>
+                            {% else %}
+                                <a href="{% url 'ipam:ip_set_status' ip.pk 'available' %}" class="btn btn-sm btn-outline-info">恢复</a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button" onclick="pingIP('{{ ip.ip_address }}', this)" 
+                                    class="btn btn-sm btn-outline-info" title="Ping 探测">
+                                <i class="bi bi-wifi"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="10" class="text-center py-4 text-muted">暂无IP地址数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 分页 -->
+        {% if is_paginated %}
+        <div class="card-footer">
+            <nav aria-label="分页导航">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.subnet %}&subnet={{ request.GET.subnet }}{% endif %}">« 上一页</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">« 上一页</span></li>
+                    {% endif %}
+
+                    <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.subnet %}&subnet={{ request.GET.subnet }}{% endif %}">下一页 »</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">下一页 »</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// 快速 Ping 探测
+function doQuickPing() {
+    const ip = document.getElementById('quick-ping-ip').value.trim();
+    const resultDiv = document.getElementById('quick-ping-result');
+    const btn = document.getElementById('ping-btn');
+    
+    if (!ip) { resultDiv.innerHTML = '<span class="text-danger">请输入IP</span>'; return; }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Ping...';
+    resultDiv.innerHTML = '<span class="text-info">探测中...</span>';
+    
+    fetch(`/ipam/api/ping/?ip=${encodeURIComponent(ip)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                resultDiv.innerHTML = `<span class="text-danger">${data.error}</span>`;
+            } else if (data.is_online) {
+                resultDiv.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>在线 | ${data.avg_time || '-'}ms | TTL:${data.ttl || '-'}</span>`;
+            } else {
+                resultDiv.innerHTML = `<span class="text-secondary"><i class="bi bi-dash-circle me-1"></i>离线</span>`;
+            }
+        })
+        .catch(() => { resultDiv.innerHTML = '<span class="text-danger">请求失败</span>'; })
+        .finally(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-send me-1"></i>Ping'; });
+}
+
+// 单行 IP 探测
+function pingIP(ip, btnEl) {
+    const originalHTML = btnEl.innerHTML;
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    
+    fetch(`/ipam/api/ping/?ip=${encodeURIComponent(ip)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.is_online) {
+                // 找到当前行的状态列并高亮
+                const row = btnEl.closest('tr');
+                row.classList.add('table-success');
+                setTimeout(() => row.classList.remove('table-success'), 2000);
+                
+                alert(`${ip} 在线\n延迟: ${data.avg_time || '-'}ms\n丢包率: ${data.packet_loss}%`);
+            } else {
+                alert(`${ip} 离线或无响应`);
+            }
+        })
+        .catch(() => { alert('探测失败'); })
+        .finally(() => { 
+            btnEl.disabled = false; 
+            btnEl.innerHTML = originalHTML; 
+        });
+}
+
+// 回车触发 Ping
+document.getElementById('quick-ping-ip')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') doQuickPing();
+});
+</script>
+{% endblock %}

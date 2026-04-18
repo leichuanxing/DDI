@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}添加租约{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-clock-history"></i> 手动添加租约</h4>
+
+<div class="card" style="max-width: 700px;">
+    <div class="card-body">
+        <form method="post" novalidate>{% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6"><label class="form-label fw-bold">IP地址</label>{{ form.ip_address }}</div>
+                <div class="col-md-6"><label class="form-label fw-bold">MAC地址</label>{{ form.mac_address }}</div>
+                <div class="col-md-6"><label class="form-label">主机名</label>{{ form.hostname }}</div>
+                <div class="col-md-6"><label class="form-label">设备标识</label>{{ form.device_identifier }}</div>
+                <div class="col-md-6"><label class="form-label">开始时间</label>{{ form.start_time }}</div>
+                <div class="col-md-6"><label class="form-label">结束时间</label>{{ form.end_time }}</div>
+                <div class="col-md-6"><label class="form-label">状态</label>{{ form.status }}</div>
+                <div class="col-md-6"><label class="form-label">所属地址池</label>{{ form.pool }}</div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <a href="{% url 'dhcpmgr:lease_list' %}" class="btn btn-secondary">返回</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

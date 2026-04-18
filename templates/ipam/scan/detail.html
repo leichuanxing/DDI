@@ -1,0 +1,447 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ task.name }} - 探测详情{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- 任务头部信息 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="m-0"><i class="bi bi-radar me-2"></i>{{ task.name }}</h5>
+                    <div>
+                        {% if task.status == 'pending' %}
+                        <button onclick="executeTask({{ task.pk }})" class="btn btn-light btn-sm">
+                            <i class="bi bi-play-fill me-1"></i>执行
+                        </button>
+                        {% elif task.status == 'running' %}
+                        <button onclick="cancelTask({{ task.pk }})" class="btn btn-danger btn-sm">
+                            <i class="bi bi-stop-fill me-1"></i>取消
+                        </button>
+                        <button onclick="refreshProgress()" class="btn btn-outline-light btn-sm ms-2">
+                            <i class="bi bi-arrow-clockwise me-1"></i>刷新进度
+                        </button>
+                        {% endif %}
+                        <a href="{% url 'ipam:scan_index' %}" class="btn btn-outline-light btn-sm ms-2">
+                            <i class="bi bi-list me-1"></i>返回列表
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="row">
+                        <!-- 基本信息 -->
+                        <div class="col-md-8">
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                    <tr><td width="120" class="text-muted">任务类型:</td>
+                                        <td><span class="badge rounded-pill bg-{% if task.task_type == 'ping' %}primary{% elif task.task_type == 'port' %}success{% else %}warning{% endif %}">
+                                            {{ task.get_task_type_display }}
+                                        </span></td></tr>
+                                    <tr><td class="text-muted">目标:</td>
+                                        <td>{% if task.subnet %}<strong>{{ task.subnet.cidr }}</strong> ({{ task.subnet.name }}){% elif task.start_ip and task.end_ip %}<strong>{{ task.start_ip }} - {{ task.end_ip }}{% elif task.start_ip %}<strong>{{ task.start_ip }}{% else %}-{% endif %}</strong></td></tr>
+                                    <tr><td class="text-muted">状态:</td>
+                                        <td id="task-status">{% include 'ipam/scan/_status_badge.html' with status=task.status %}</td></tr>
+                                    <tr><td class="text-muted">创建时间:</td><td>{{ task.created_at|date:"Y-m-d H:i:s" }}</td></tr>
+                                    <tr><td class="text-muted">创建人:</td><td>{{ task.created_by|default:"系统" }}</td></tr>
+                                    {% if task.notes %}
+                                    <tr><td class="text-muted">备注:</td><td>{{ task.notes }}</td></tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 统计卡片 -->
+                        <div class="col-md-4">
+                            <div class="row text-center g-2">
+                                <div class="col-6">
+                                    <div class="card bg-success text-white p-2">
+                                        <div class="fs-4 fw-bold" id="online-count">{{ stats.online }}</div>
+                                        <small>在线主机</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card bg-secondary text-white p-2">
+                                        <div class="fs-4 fw-bold">{{ stats.offline }}</div>
+                                        <small>离线/无响应</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card bg-warning p-2">
+                                        <div class="fs-4 fw-bold">{{ stats.new_hosts }}</div>
+                                        <small>新发现</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card bg-danger text-white p-2">
+                                        <div class="fs-4 fw-bold">{{ stats.conflicts }}</div>
+                                        <small>状态冲突</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 进度条 -->
+                            {% if task.total_targets > 0 %}
+                            <div class="mt-3">
+                                <div class="d-flex justify-content-between small">
+                                    <span>扫描进度</span>
+                                    <span id="progress-text">{{ task.scanned_count }}/{{ task.total_targets }}</span>
+                                </div>
+                                <div class="progress mt-1" style="height:20px;">
+                                    <div class="progress-bar progress-bar-striped {% if task.status == 'running' %}progress-bar-animated{% endif %}" 
+                                         role="progressbar" style="width:{{ task.progress }}%" 
+                                         id="progress-bar">{{ task.progress }}%</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 筛选和操作栏 -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body py-2">
+                    <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+                        <div class="input-group input-group-sm" style="width:200px;">
+                            <input type="text" name="q" value="{{ search_ip }}" placeholder="搜索IP地址..." class="form-control">
+                            <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+                        </div>
+                        
+                        <div class="btn-group btn-group-sm">
+                            <a href="?status=online{% if search_ip %}&q={{ search_ip }}{% endif %}"
+                               class="btn {% if filter_status == 'online' %}btn-success{% else %}btn-outline-success{% endif %}">
+                                在线 ({{ results.filter|length }})
+                            </a>
+                            <a href="?status=offline{% if search_ip %}&q={{ search_ip }}{% endif %}"
+                               class="btn {% if filter_status == 'offline' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                                离线
+                            </a>
+                            <a href="?status=new{% if search_ip %}&q={{ search_ip }}{% endif %}"
+                               class="btn {% if filter_status == 'new' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                                新发现
+                            </a>
+                            <a href="?status=conflict{% if search_ip %}&q={{ search_ip }}{% endif %}"
+                               class="btn {% if filter_status == 'conflict' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                                冲突
+                            </a>
+                            <a href="{% url 'ipam:scan_detail' task.pk %}" class="btn btn-outline-primary">全部</a>
+                        </div>
+                        
+                        <div class="ms-auto">
+                            <a href="{% url 'ipam:scan_export' task.pk %}" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-download me-1"></i>导出CSV
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 结果表格 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body p-0" style="max-height:600px; overflow-y:auto;">
+                    {% if results %}
+                    <table class="table table-hover mb-0 scan-result-table">
+                        <thead class="sticky-top bg-white border-bottom shadow-sm">
+                            <tr>
+                                <th style="width:180px;">IP 地址</th>
+                                <th style="width:70px; text-align:center;">状态</th>
+                                <th style="width:80px; text-align:right;">延迟</th>
+                                <th style="width:70px; text-align:right;">丢包率</th>
+                                <th style="width:50px; text-align:center;">TTL</th>
+                                <th>反解域名</th>
+                                <th style="min-width:120px;">开放端口</th>
+                                <th style="width:60px; text-align:center;">标记</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in results %}
+                            <tr class="{% if r.is_online %}scan-row-online{% else %}scan-row-offline{% endif %}">
+                                <td>
+                                    <code class="text-primary fw-bold">{{ r.ip_address }}</code>
+                                    <button onclick="showAllocateModal('{{ r.ip_address }}', {{ task.subnet.id|default:'null' }})"
+                                            class="btn btn-outline-primary btn-xs ms-1 allocate-btn" title="分配此IP">
+                                        <i class="bi bi-plus-circle"></i> 分配
+                                    </button>
+                                </td>
+                                <td class="text-center">
+                                    {% if r.is_online %}
+                                        <span class="badge rounded-pill status-badge-online"><i class="bi bi-check-circle-fill"></i></span>
+                                    {% else %}
+                                        <span class="badge rounded-pill status-badge-offline"><i class="bi bi-dash-circle"></i></span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-nowrap font-monospace{% if r.is_online %} text-success{% else %} text-muted{% endif %}">
+                                    {% if r.ping_avg_time is not None %}{{ r.ping_avg_time|floatformat:2 }}<small class="ms-1">ms</small>{% else %}-{% endif %}
+                                </td>
+                                <td class="text-end{% if r.packet_loss == 100.0 or r.packet_loss == 0.0 %} text-muted{% elif r.packet_loss > 50 %} text-danger{% else %} text-warning{% endif %}">
+                                    {{ r.packet_loss|floatformat:1 }}%
+                                </td>
+                                <td class="text-center text-muted">{% if r.ttl %}<code>{{ r.ttl }}</code>{% else %}-{% endif %}</td>
+                                <td class="text-muted small">{% if r.reverse_dns %}<code>{{ r.reverse_dns|truncatechars:30 }}</code>{% else %}<span>-</span>{% endif %}</td>
+                                <td>
+                                    {% if r.open_ports %}
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for port, info in r.open_ports.items %}
+                                                {% if info.state == 'open' %}
+                                                    <a href="#" class="port-tag" title="{{ info.service }}: {{ port }}">{{ port }}</a>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}<span class="text-muted">-</span>{% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if r.is_new_host %}
+                                        <span class="badge rounded-pill bg-warning text-dark fs-7" title="新发现主机">NEW</span>
+                                    {% endif %}
+                                    {% if r.status_conflict %}
+                                        <span class="badge rounded-pill bg-danger fs-7" title="状态冲突">!</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% elif task.status == 'completed' or task.status == 'cancelled' or task.status == 'failed' %}
+                    <div class="text-center p-5 text-muted">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        <p>没有找到匹配的结果</p>
+                    </div>
+                    {% else %}
+                    <div class="text-center p-5 text-muted">
+                        <i class="bi bi-hourglass-split fs-1 d-block mb-2"></i>
+                        <p>等待扫描完成...</p>
+                        {% if task.status == 'pending' %}
+                        <p class="small">点击上方「执行」按钮开始扫描</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 状态徽章模板 -->
+{% comment %} 已移到单独模板文件 {% endcomment %}
+
+<script>
+let progressTimer = null;
+
+function executeTask(pk) {
+    if (!confirm('确定开始执行此扫描任务？')) return;
+    
+    fetch(`/ipam/scan/${pk}/execute/`, {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token }}'}})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('扫描任务已启动，请稍候...');
+                location.reload();
+            } else {
+                alert('错误: ' + data.error);
+            }
+        });
+}
+
+function cancelTask(pk) {
+    if (!confirm('确定取消？已扫描的数据将被保留。')) return;
+    
+    fetch(`/ipam/scan/${pk}/cancel/`, {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token }}'}})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) location.reload();
+        });
+}
+
+function refreshProgress() {
+    fetch(`/ipam/scan/{{ task.pk }}/progress/`)
+        .then(r => r.json())
+        .then(data => {
+            // 更新进度条
+            const pct = data.total > 0 ? Math.round((data.scanned / data.total) * 100) : 0;
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-bar').textContent = pct + '%';
+            document.getElementById('progress-text').textContent = data.scanned + '/' + data.total;
+            
+            document.getElementById('online-count').textContent = data.online;
+            
+            // 直接更新状态徽章（无需额外请求）
+            const statusEl = document.getElementById('task-status');
+            const statusMap = {
+                'running': '<span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat spin me-1"></i>执行中</span>',
+                'completed': '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>已完成</span>',
+                'failed': '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>失败</span>',
+                'pending': '<span class="badge bg-secondary">待执行</span>',
+                'cancelled': '<span class="badge bg-dark">已取消</span>'
+            };
+            statusEl.innerHTML = statusMap[data.status] || '';
+            
+            // 如果还在运行，继续轮询
+            if (data.status === 'running') {
+                setTimeout(refreshProgress, 3000);
+            } else {
+                location.reload(); // 完成后刷新页面
+            }
+        });
+}
+
+// 如果正在运行，自动刷新进度
+{% if task.status == 'running' %}
+setTimeout(refreshProgress, 2000);
+{% endif %}
+
+// 快速分配IP
+function showAllocateModal(ip, subnetId) {
+    document.getElementById('allocate-ip').textContent = ip;
+    document.getElementById('modal-ip-address').value = ip;
+    document.getElementById('modal-subnet-id').value = subnetId || '';
+    
+    // 清空表单
+    document.getElementById('modal-device-name').value = '';
+    document.getElementById('modal-owner').value = '';
+    document.getElementById('modal-department').value = '';
+    
+    new bootstrap.Modal(document.getElementById('allocateModal')).show();
+}
+
+function submitAllocate() {
+    const btn = document.getElementById('allocate-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>分配中...';
+    
+    fetch('/ipam/api/allocate-ip/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            ip_address: document.getElementById('modal-ip-address').value,
+            subnet_id: document.getElementById('modal-subnet-id').value,
+            device_name: document.getElementById('modal-device-name').value,
+            owner: document.getElementById('modal-owner').value,
+            department: document.getElementById('modal-department').value,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            bootstrap.Modal.getInstance(document.getElementById('allocateModal')).hide();
+            location.reload();
+        } else {
+            alert('错误: ' + data.error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>确认分配';
+        }
+    })
+    .catch(err => {
+        alert('请求失败: ' + err);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>确认分配';
+    });
+}
+</script>
+
+<style>
+/* 扫描结果表格样式 */
+.scan-result-table { font-size: 0.875rem; border-collapse: separate; }
+.scan-result-table thead th { font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; white-space: nowrap; }
+.scan-result-table tbody td { vertical-align: middle; padding: 7px 12px; }
+
+/* 在线行 */
+.scan-row-online { background-color: #f0fff4; }
+.scan-row-online:hover { background-color: #dcfce7 !important; }
+
+/* 离线行 */
+.scan-row-offline { background-color: #fafafa; }
+.scan-row-offline:hover { background-color: #e9ecef !important; }
+.scan-row-offline td { opacity: 0.65; }
+
+/* 状态徽章 */
+.status-badge-online { 
+    background-color: #22c55e; color: white; font-size: 0.72rem; 
+    padding: 3px 8px; font-weight: 500;
+}
+.status-badge-offline { 
+    background-color: #d1d5db; color: #6b7280; font-size: 0.72rem;
+    padding: 3px 8px; font-weight: 500;
+}
+
+/* 端口标签 */
+.port-tag {
+    display: inline-block; font-size: 0.75rem; padding: 1px 6px; border-radius: 4px;
+    background-color: #374151; color: #fff; text-decoration: none;
+    transition: all 0.15s ease; line-height: 1.5;
+}
+.port-tag:hover { background-color: #1f2937; transform: scale(1.05); }
+
+.gap-1 { gap: 3px !important; }
+
+/* 表格边框优化 */
+.scan-result-table thead tr { border-bottom: 2px solid #e2e8f0; }
+.scan-result-table tbody tr + tr { border-top: 1px solid #f1f5f9; }
+
+/* 分配按钮 */
+.allocate-btn {
+    font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
+    line-height: 1.4; opacity: 0.6; transition: all 0.15s ease;
+}
+.allocate-btn:hover { opacity: 1; transform: scale(1.05); }
+tr:hover .allocate-btn { opacity: 1; }
+
+.btn-xs { font-size: 0.7rem; padding: 2px 6px; }
+</style>
+
+<!-- 快速分配IP弹窗 -->
+<div class="modal fade" id="allocateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title"><i class="bi bi-plus-circle me-1"></i>快速分配 IP</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form onsubmit="event.preventDefault(); submitAllocate();">
+                <div class="modal-body py-3">
+                    <div class="mb-3 text-center">
+                        <span class="fs-5 fw-bold text-primary" id="allocate-ip"></span>
+                        <input type="hidden" id="modal-ip-address">
+                        <input type="hidden" id="modal-subnet-id">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">设备名称</label>
+                        <input type="text" id="modal-device-name" class="form-control form-control-sm"
+                               placeholder="例: Web服务器-01">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">使用人</label>
+                        <input type="text" id="modal-owner" class="form-control form-control-sm"
+                               placeholder="例: 张三">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label small mb-1">部门</label>
+                        <input type="text" id="modal-department" class="form-control form-control-sm"
+                               placeholder="例: 运维部">
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" id="allocate-submit-btn"
+                            class="btn btn-sm btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>确认分配
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}DNS区域管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-globe"></i> DNS区域管理</h4>
+    <a href="{% url 'dnsmgr:zone_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增区域</a>
+</div>
+
+<div class="row g-3">
+    {% for zone in zones %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between">
+                <span><strong>{{ zone.name }}</strong></span>
+                <span class="badge {% if zone.zone_type == 'forward' %}bg-info{% else %}bg-secondary{% endif %}">
+                    {{ zone.get_zone_type_display }}
+                </span>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">{{ zone.description|truncatechars:50|default:"暂无描述" }}</p>
+                <div class="d-flex justify-content-between small">
+                    <span>主DNS: <code>{{ zone.primary_dns|default:"-" }}</code></span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between small text-muted">
+                    <span>记录数: <strong>{{ zone.record_count }}</strong></span>
+                    <span>启用: <strong>{{ zone.enabled_record_count }}</strong></span>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent d-flex justify-content-between">
+                <a href="{% url 'dnsmgr:zone_detail' zone.pk %}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> 查看详情
+                </a>
+                <div>
+                    <a href="{% url 'dnsmgr:zone_edit' zone.pk %}" class="btn btn-sm btn-outline-secondary">编辑</a>
+                    <a href="{% url 'dnsmgr:zone_delete' zone.pk %}" class="btn btn-sm btn-outline-danger">删除</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5 text-muted">
+        <i class="bi bi-globe fs-1 d-block mb-2"></i> 暂无DNS区域数据
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

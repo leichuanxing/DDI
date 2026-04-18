@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}网络拓扑{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4><i class="bi bi-di-projector me-2"></i>实时网络拓扑</h4>
+            <p class="text-muted">基于最近探测数据展示各子网在线主机分布</p>
+        </div>
+    </div>
+
+    <!-- 子网统计概览 -->
+    <div class="row mb-4" id="subnet-stats">
+        {% for data in subnets_data %}
+        <div class="col-md-6 col-lg-4 col-xl-3 mb-3">
+            <a href="#" onclick="showSubnetDetail('{{ data.subnet.cidr }}')" class="text-decoration-none">
+                <div class="card border-left-primary h-100 hover-shadow">
+                    <div class="card-body">
+                        <h6>{{ data.subnet.name }}</h6>
+                        <p class="mb-1 text-muted small">{{ data.subnet.cidr }}</p>
+                        
+                        <div class="progress mt-2" style="height: 8px;">
+                            {% widthratio data.online_count data.total_count 100 as usage %}
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {% if data.total_count > 0 %}{{ usage }}{% else %}0%{% endif %}"
+                                 aria-valuenow="{{ data.online_count }}"></div>
+                        </div>
+                        
+                        <small class="mt-1 d-block">
+                            <span class="text-success">{{ data.online_count }} 在线</span> / 
+                            {{ data.total_count }} 总数
+                        </small>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center p-5">
+            <i class="bi bi-wifi-off fs-1 d-block mb-2"></i>
+            <p class="text-muted">暂无探测数据，请先执行扫描任务</p>
+            <a href="{% url 'ipam:scan_create' %}" class="btn btn-primary">
+                <i class="bi bi-radar me-1"></i>开始扫描
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 最近在线主机列表 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="m-0"><i class="bi bi-pc-display-horizontal me-2"></i>最近在线主机 (最近探测)</h6>
+                    <span class="badge bg-primary">{{ recent_probes|length }}</span>
+                </div>
+                
+                <div class="card-body p-0">
+                    {% if recent_probes %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped table-sm mb-0">
+                            <thead class="table-dark">
+                                <tr><th>IP 地址</th><th>状态</th><th>延迟</th><th>MAC/厂商</th><th>开放端口</th><th>来源子网</th><th>探测时间</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for probe in recent_probes|slice:":50" %}
+                                <tr>
+                                    <td><strong>{{ probe.ip_address }}</strong></td>
+                                    <td>
+                                        <span class="badge bg-{% if probe.is_online %}success{% else %}secondary{% endif %}">
+                                            {% if probe.is_online %}在线{% else %}离线{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>{% if probe.ping_time %}{{ probe.ping_time|floatformat:1 }}ms{% else %}-{% endif %}</td>
+                                    <td>
+                                        {% if probe.mac_address %}
+                                            <code>{{ probe.mac_address }}</code>
+                                        {% else %}-{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if probe.open_ports %}
+                                            {% for port in probe.open_ports|slice:":3" %}
+                                                <span class="badge bg-dark me-1" style="font-size:.7rem;">{{ port }}</span>
+                                            {% endfor %}
+                                            {% if probe.open_ports|length > 3 %}
+                                                +{{ probe.open_ports|length|add:"-3" }}
+                                            {% endif %}
+                                        {% else %}<span class="text-muted">-</span>{% endif %}
+                                    </td>
+                                    <td>{% if probe.subnet %}{{ probe.subnet.name }}<br><small>{{ probe.subnet.cidr }}</small>{% else %}-{% endif %}</td>
+                                    <td><small>{{ probe.probed_at|date:"m-d H:i:s" }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {% if recent_probes|length > 50 %}
+                    <div class="p-2 text-center bg-light">
+                        <small class="text-muted">显示前 50 条记录，共 {{ recent_probes|length }} 条</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center p-5 text-muted">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        <p>暂无探测数据</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.hover-shadow { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.hover-shadow:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }
+.border-left-primary { border-left: 4px solid #0d6efd !important; }
+</style>
+
+<script>
+function showSubnetDetail(cidr) {
+    // TODO: 可以跳转到该子网的详细视图
+}
+</script>
+{% endblock %}

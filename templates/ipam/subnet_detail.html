@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+
+{% block title %}子网详情 - {{ subnet.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item"><a href="{% url 'ipam:subnet_list' %}">子网列表</a></li>
+                <li class="breadcrumb-item active">{{ subnet.name }} ({{ subnet.cidr }})</li>
+            </ol>
+        </nav>
+    </div>
+    <div>
+        <a href="{% url 'ipam:batch_allocate' subnet.pk %}" class="btn btn-warning btn-sm me-2">
+            <i class="bi bi-collection"></i> 批量分配
+        </a>
+        <a href="{% url 'ipam:subnet_edit' subnet.pk %}" class="btn btn-outline-secondary btn-sm me-2">编辑</a>
+        <a href="{% url 'ipam:subnet_delete' subnet.pk %}" class="btn btn-outline-danger btn-sm">删除</a>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="row g-3 mb-4">
+    <div class="col-auto">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center py-2 px-3">
+                <div class="stat-value fs-4">{{ stats.total }}</div>
+                <small class="stat-label">总IP数</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-auto">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center py-2 px-3">
+                <div class="stat-value fs-4 text-primary">{{ stats.allocated }}</div>
+                <small class="stat-label">已分配</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-auto">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center py-2 px-3">
+                <div class="stat-value fs-4 text-success">{{ stats.available }}</div>
+                <small class="stat-label">空闲</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-auto">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center py-2 px-3">
+                <div class="stat-value fs-4 text-warning">{{ stats.reserved }}</div>
+                <small class="stat-label">保留</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-auto">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center py-2 px-3">
+                <div class="stat-value fs-4 text-danger">{{ stats.conflict }}</div>
+                <small class="stat-label">冲突</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选和搜索 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    <option value="available" {% if status_filter == 'available' %}selected{% endif %}>空闲</option>
+                    <option value="allocated" {% if status_filter == 'allocated' %}selected{% endif %}>已分配</option>
+                    <option value="reserved" {% if status_filter == 'reserved' %}selected{% endif %}>保留</option>
+                    <option value="conflict" {% if status_filter == 'conflict' %}selected{% endif %}>冲突</option>
+                    <option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>禁用</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="search" value="{{ search }}" 
+                       class="form-control form-control-sm" placeholder="搜索IP、主机名、设备...">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 筛选</button>
+                <a href="{% url 'ipam:subnet_detail' subnet.pk %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- IP列表 -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>IP地址</th>
+                        <th>状态</th>
+                        <th>主机名</th>
+                        <th>设备名</th>
+                        <th>使用人</th>
+                        <th>MAC地址</th>
+                        <th>设备类型</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ip in ips %}
+                    <tr>
+                        <td>
+                            <code>{{ ip.ip_address }}</code>
+                            <button onclick="probeIP(this, '{{ ip.ip_address }}')" class="btn btn-xs btn-outline-info ms-1 probe-btn" title="Ping探测">
+                                <i class="bi bi-broadcast"></i> 探测
+                            </button>
+                            <span class="probe-result ms-1"></span>
+                        </td>
+                        <td>
+                            <span class="badge rounded-pill status-{{ ip.status }}">{{ ip.get_status_display }}</span>
+                        </td>
+                        <td>{{ ip.hostname|truncatechars:20 }}</td>
+                        <td>{{ ip.device_name|truncatechars:20 }}</td>
+                        <td>{{ ip.owner|default:"-" }}</td>
+                        <td><code>{{ ip.mac_address|truncatechars:17 }}</code></td>
+                        <td>{{ ip.device_type|default:"-" }}</td>
+                        <td>
+                            {% if ip.status == 'available' or ip.status == 'disabled' %}
+                                <a href="{% url 'ipam:ip_allocate' ip.pk %}" class="btn btn-sm btn-outline-primary">分配</a>
+                            {% elif ip.status == 'allocated' %}
+                                <a href="{% url 'ipam:ip_release' ip.pk %}" class="btn btn-sm btn-outline-warning">释放</a>
+                            {% elif ip.status != 'conflict' and ip.status != 'reserved' %}
+                                <a href="{% url 'ipam:ip_set_status' ip.pk 'reserved' %}" class="btn btn-sm btn-outline-secondary">保留</a>
+                            {% else %}
+                                <a href="{% url 'ipam:ip_set_status' ip.pk 'available' %}" class="btn btn-sm btn-outline-info">恢复</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center py-4 text-muted">暂无IP数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+function probeIP(btn, ip) {
+    const resultSpan = btn.nextElementSibling;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-xs"></span>';
+    
+    fetch(`/ipam/api/ping/?ip=${encodeURIComponent(ip)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (data.is_online) {
+                    resultSpan.innerHTML = `<span class="badge rounded-pill bg-success" title="${data.ttl ? 'TTL:'+data.ttl : ''}">
+                        <i class="bi bi-check-circle-fill me-1"></i>${data.avg_time}ms
+                    </span>`;
+                } else {
+                    resultSpan.innerHTML = `<span class="badge rounded-pill bg-secondary">
+                        <i class="bi bi-dash-circle me-1"></i>无响应
+                    </span>`;
+                }
+            } else {
+                resultSpan.innerHTML = `<span class="badge rounded-pill bg-danger" title="${data.error||'失败'}">
+                    <i class="bi bi-x-circle me-1"></i>失败
+                </span>`;
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-broadcast"></i> 探测';
+        })
+        .catch(err => {
+            resultSpan.innerHTML = `<span class="badge rounded-pill bg-danger"><i class="bi bi-x-circle me-1"></i>错误</span>`;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-broadcast"></i> 探测';
+        });
+}
+</script>
+
+<style>
+.probe-btn { font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; line-height: 1.4; opacity: 0.5; transition: all 0.15s ease; }
+.probe-btn:hover { opacity: 1; transform: scale(1.05); }
+tr:hover .probe-btn { opacity: 1; }
+.btn-xs { font-size: 0.7rem; }
+.spinner-border-xs { width: 10px; height: 10px; border-width: 2px; }
+</style>
+{% endblock %}

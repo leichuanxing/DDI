@@ -1,0 +1,11 @@
+{% if status == 'running' %}
+<span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat spin me-1"></i>执行中</span>
+{% elif status == 'completed' %}
+<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>已完成</span>
+{% elif status == 'failed' %}
+<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>失败</span>
+{% elif status == 'pending' %}
+<span class="badge bg-secondary">待执行</span>
+{% elif status == 'cancelled' %}
+<span class="badge bg-dark">已取消</span>
+{% endif %}

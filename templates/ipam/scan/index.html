@@ -1,0 +1,420 @@
+{% extends 'base.html' %}
+
+{% block title %}网络探测{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">
+                    <i class="bi bi-radar me-2"></i>网络探测中心
+                </h3>
+                <a href="{% url 'ipam:scan_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i>新建探测任务
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 快速操作卡片 -->
+    <div class="row mb-4">
+        <div class="col-md-6 col-lg-3 mb-3">
+            <a href="{% url 'ipam:scan_create' %}?type=ping" class="text-decoration-none">
+                <div class="card border-left-primary h-100 hover-shadow">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="icon-circle bg-primary text-white">
+                                    <i class="bi bi-wifi"></i>
+                                </div>
+                            </div>
+                            <div class="col ms-2">
+                                <h5 class="mb-0">Ping 探测</h5>
+                                <small class="text-muted">检测主机在线状态</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-md-6 col-lg-3 mb-3">
+            <a href="{% url 'ipam:scan_create' %}?type=port" class="text-decoration-none">
+                <div class="card border-left-success h-100 hover-shadow">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="icon-circle bg-success text-white">
+                                    <i class="bi bi-door-open"></i>
+                                </div>
+                            </div>
+                            <div class="col ms-2">
+                                <h5 class="mb-0">端口扫描</h5>
+                                <small class="text-muted">检测开放服务端口</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-md-6 col-lg-3 mb-3">
+            <a href="{% url 'ipam:scan_create' %}?type=full" class="text-decoration-none">
+                <div class="card border-left-warning h-100 hover-shadow">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="icon-circle bg-warning text-white">
+                                    <i class="bi bi-globe"></i>
+                                </div>
+                            </div>
+                            <div class="col ms-2">
+                                <h5 class="mb-0">综合扫描</h5>
+                                <small class="text-muted">Ping+DNS+端口+ARP</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        
+        <div class="col-md-6 col-lg-3 mb-3">
+            <a href="{% url 'ipam:live_topology' %}" class="text-decoration-none">
+                <div class="card border-left-info h-100 hover-shadow">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="icon-circle bg-info text-white">
+                                    <i class="bi di-projector"></i>
+                                </div>
+                            </div>
+                            <div class="col ms-2">
+                                <h5 class="mb-0">网络拓扑</h5>
+                                <small class="text-muted">实时在线主机分布</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- 快速Ping工具 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h6 class="m-0 font-weight-bold"><i class="bi bi-broadcast-pin me-2"></i>快速 Ping 探测</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-end">
+                        <div class="col-md-4">
+                            <label for="quick-ping-ip" class="form-label">IP 地址</label>
+                            <input type="text" id="quick-ping-ip" class="form-control" 
+                                   placeholder="输入要探测的IP地址，如 192.168.1.1" value="">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" onclick="doQuickPing()" class="btn btn-outline-primary w-100"
+                                    id="ping-btn">
+                                <i class="bi bi-send me-1"></i>Ping 探测
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="quick-ping-result" class="p-2 rounded" style="min-height: 40px;">
+                                <!-- 结果显示区域 -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 快速端口扫描 -->
+                    <hr>
+                    <div class="row align-items-end mt-2">
+                        <div class="col-md-3">
+                            <label for="scan-ip" class="form-label">目标 IP</label>
+                            <input type="text" id="scan-ip" class="form-control" placeholder="192.168.1.10">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="scan-ports" class="form-label">扫描端口</label>
+                            <input type="text" id="scan-ports" class="form-control" value="22,80,443,3389"
+                                   placeholder="22,80,443 或 1-1024">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" onclick="doPortScan()" class="btn btn-outline-success w-100"
+                                    id="port-scan-btn">
+                                <i class="bi bi-search me-1"></i>端口扫描
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <div id="quick-port-result" class="p-2 rounded" style="min-height: 40px;"></div>
+                        </div>
+                    </div>
+                    <div id="port-result-detail" class="mt-3" style="display: none;">
+                        <table class="table table-sm table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>端口</th><th>状态</th><th>服务</th><th>Banner信息</th></tr>
+                            </thead>
+                            <tbody id="port-results-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近任务列表 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="m-0"><i class="bi bi-clock-history me-2"></i>最近探测任务</h6>
+                    <a href="{% url 'ipam:probe_history' %}" class="btn btn-sm btn-outline-secondary">
+                        查看历史记录
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    {% if tasks %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>任务名称</th>
+                                    <th>类型</th>
+                                    <th>状态</th>
+                                    <th>进度</th>
+                                    <th>统计</th>
+                                    <th>耗时</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for task in tasks %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ task.name }}</strong>
+                                        {% if task.subnet %}
+                                            <br><small class="text-muted">{{ task.subnet.cidr }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge rounded-pill {% if task.task_type == 'ping' %}bg-primary{% elif task.task_type == 'port' %}bg-success{% elif task.task_type == 'full' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                            {{ task.get_task_type_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if task.status == 'running' %}
+                                            <span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat spin me-1"></i>执行中</span>
+                                        {% elif task.status == 'completed' %}
+                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>已完成</span>
+                                        {% elif task.status == 'failed' %}
+                                            <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>失败</span>
+                                        {% elif task.status == 'pending' %}
+                                            <span class="badge bg-secondary">待执行</span>
+                                        {% elif task.status == 'cancelled' %}
+                                            <span class="badge bg-dark">已取消</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="width:120px; height:18px;" title="{{ task.progress }}%">
+                                            <div class="progress-bar progress-bar-striped {% if task.status == 'running' %}progress-bar-animated{% endif %}" 
+                                                 role="progressbar" style="width: {{ task.progress }}%">
+                                                {{ task.progress }}%
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">{{ task.scanned_count }}/{{ task.total_targets }}</small>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            <span class="text-success">{{ task.online_count }} 在线</span> / 
+                                            <span class="text-danger">{{ task.offline_count }} 离线</span>
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if task.duration is not None %}
+                                            {{ task.duration }}s
+                                        {% elif task.started_at %}
+                                            进行中...
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ task.created_at|date:"m-d H:i" }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'ipam:scan_detail' task.pk %}" class="btn btn-outline-primary" title="查看详情">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            
+                                            {% if task.status in 'pending' %}
+                                                <button onclick="executeTask({{ task.pk }})" class="btn btn-outline-success" title="执行任务">
+                                                    <i class="bi bi-play-fill"></i>
+                                                </button>
+                                            {% elif task.status == 'running' %}
+                                                <button onclick="cancelTask({{ task.pk }})" class="btn btn-outline-danger" title="取消任务">
+                                                    <i class="bi bi-stop-fill"></i>
+                                                </button>
+                                            {% endif %}
+                                            
+                                            <form action="{% url 'ipam:scan_delete' task.pk %}" method="POST" 
+                                                  style="display:inline;" 
+                                                  onsubmit="return confirm('确定删除此任务及其所有结果？');">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-outline-danger" title="删除任务">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center p-5 text-muted">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        <p>暂无探测任务</p>
+                        <a href="{% url 'ipam:scan_create' %}" class="btn btn-primary btn-sm">创建第一个探测任务</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.border-left-primary { border-left: 4px solid #0d6efd !important; }
+.border-left-success { border-left: 4px solid #198754 !important; }
+.border-left-warning { border-left: 4px solid #ffc107 !important; }
+.border-left-info { border-left: 4px solid #0dcaf0 !important; }
+.icon-circle { width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem; }
+.hover-shadow { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.hover-shadow:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { from {transform:rotate(0deg);} to {transform:rotate(360deg);} }
+</style>
+<script>
+// 快速Ping
+function doQuickPing() {
+    const ip = document.getElementById('quick-ping-ip').value.trim();
+    const resultDiv = document.getElementById('quick-ping-result');
+    const btn = document.getElementById('ping-btn');
+    
+    if (!ip) {
+        resultDiv.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>请输入IP地址</span>';
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>探测中...';
+    resultDiv.innerHTML = '<span class="text-info"><span class="spinner-border spinner-border-sm me-1"></span>正在探测 ' + ip + ' ...</span>';
+    
+    fetch(`/ipam/api/ping/?ip=${encodeURIComponent(ip)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                resultDiv.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
+            } else if (data.is_online) {
+                resultDiv.innerHTML = `
+                    <span class="text-success fw-bold">
+                        <i class="bi bi-check-circle me-1"></i>在线 | 
+                        延迟: ${data.avg_time || '-'} ms | 
+                        丢包率: ${data.packet_loss}% ${data.ttl ? '| TTL:' + data.ttl : ''}
+                    </span>`;
+            } else {
+                resultDiv.innerHTML = `<span class="text-danger"><i class="bi bi-dash-circle me-1"></i>离线 | 丢包率: ${data.packet_loss}%</span>`;
+            }
+        })
+        .catch(err => {
+            resultDiv.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>请求失败</span>';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send me-1"></i>Ping 探测';
+        });
+}
+
+// 端口扫描
+function doPortScan() {
+    const ip = document.getElementById('scan-ip').value.trim();
+    const ports = document.getElementById('scan-ports').value.trim();
+    const resultDiv = document.getElementById('quick-port-result');
+    const detailDiv = document.getElementById('port-result-detail');
+    const btn = document.getElementById('port-scan-btn');
+    
+    if (!ip) {
+        resultDiv.innerHTML = '<span class="text-danger">请输入IP地址</span>';
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>扫描中...';
+    resultDiv.innerHTML = '<span class="text-info"><span class="spinner-border spinner-border-sm me-1"></span>扫描 ' + ip + ' ...</span>';
+    detailDiv.style.display = 'none';
+    
+    fetch(`/ipam/api/port-scan/?ip=${encodeURIComponent(ip)}&ports=${encodeURIComponent(ports)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                resultDiv.innerHTML = `<span class="text-danger">${data.error}</span>`;
+            } else {
+                const openCount = data.open_count;
+                resultDiv.innerHTML = `
+                    <span class="${openCount > 0 ? 'text-success' : 'text-secondary'}">
+                        <i class="bi bi-${openCount > 0 ? 'door-open' : 'lock'} me-1"></i>
+                        共扫描 ${data.total_scanned} 个端口，发现 ${openCount} 个开放端口
+                    </span>`;
+                
+                // 显示详细结果表格
+                if (data.ports && data.ports.length > 0) {
+                    detailDiv.style.display = 'block';
+                    const tbody = document.getElementById('port-results-tbody');
+                    tbody.innerHTML = data.ports.map(p => `
+                        <tr class="${p.state === 'open' ? 'table-success' : ''}">
+                            <td><strong>${p.port}</strong></td>
+                            <td><span class="badge bg-${p.state === 'open' ? 'success' : 'secondary'}">${p.state}</span></td>
+                            <td>${p.service || '-'}</td>
+                            <td class="font-monospace small">${p.banner || '-'}</td>
+                        </tr>`).join('');
+                }
+            }
+        })
+        .catch(() => {
+            resultDiv.innerHTML = '<span class="text-danger">请求失败</span>';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-search me-1"></i>端口扫描';
+        });
+}
+
+// 执行任务
+function executeTask(pk) {
+    if (!confirm('确定开始执行此扫描任务？')) return;
+    
+    fetch(`/ipam/scan/${pk}/execute/`, {method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'}})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('错误: ' + data.error);
+            }
+        });
+}
+
+// 取消任务
+function cancelTask(pk) {
+    if (!confirm('确定取消此扫描任务？')) return;
+    
+    fetch(`/ipam/scan/${pk}/cancel/`, {method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'}})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) location.reload();
+        });
+}
+</script>
+{% endblock %}

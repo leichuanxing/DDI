@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}登录{% endblock %}
+
+{% block login_content %}
+<div class="login-wrapper d-flex align-items-center justify-content-center" style="min-height: 100vh; background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 50%, #4fd1c5 100%);">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-5 col-lg-4">
+                <div class="card shadow-lg border-0 rounded-lg mt-5" style="background: rgba(255,255,255,0.95);">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <h3 class="text-dark"><i class="bi bi-hdd-network fs-3 text-primary"></i></h3>
+                            <h4 class="text-dark fw-bold">合力数据DDI 管理系统</h4>
+                            <p class="text-muted mb-4">合力数据网络资源管理平台</p>
+                        </div>
+                        
+                        <form method="post" action="">
+                            {% csrf_token %}
+                            
+                            {% if form.errors %}
+                            <div class="alert alert-danger">
+                                用户名或密码错误，请重试
+                            </div>
+                            {% endif %}
+                            
+                            <div class="mb-3">
+                                <label for="id_username" class="form-label fw-bold">
+                                    <i class="bi bi-person"></i> 用户名
+                                </label>
+                                {{ form.username }}
+                                {% if form.username.errors %}
+                                    {% for error in form.username.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="id_password" class="form-label fw-bold">
+                                    <i class="bi bi-lock"></i> 密码
+                                </label>
+                                {{ form.password }}
+                                {% if form.password.errors %}
+                                    {% for error in form.password.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-box-arrow-in-right"></i> 登录系统
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <div class="mt-4 text-center text-muted small">
+                            <p>默认管理员账号: admin / Admin@123</p>
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer bg-transparent text-center py-3">
+                        <small class="text-muted">&copy; 2024 合力数据 DDI管理系统 v1.0</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

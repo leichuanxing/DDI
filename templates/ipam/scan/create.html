@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}新建探测任务{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="m-0"><i class="bi bi-plus-circle me-2"></i>新建网络探测任务</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="scan-form" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- 基本信息 -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.name.id_for_label }}" class="form-label fw-bold">{{ form.name.label }}</label>
+                                {{ form.name }}
+                                {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors.0 }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.task_type.id_for_label }}" class="form-label fw-bold">{{ form.task_type.label }}</label>
+                                {{ form.task_type }}
+                                {% if form.task_type.errors %}<div class="text-danger small">{{ form.task_type.errors.0 }}</div>{% endif %}
+                                <small class="text-muted">选择要执行的探测类型</small>
+                            </div>
+                        </div>
+
+                        <!-- 目标设置 -->
+                        <hr>
+                        <h6><i class="bi bi-bullseye me-1"></i> 扫描目标</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="{{ form.target_type.id_for_label }}" class="form-label fw-bold">{{ form.target_type.label }}</label>
+                                {{ form.target_type }}
+                            </div>
+                            <div id="subnet-field" class="col-md-8">
+                                <label for="{{ form.subnet.id_for_label }}" class="form-label fw-bold">{{ form.subnet.label }}</label>
+                                {{ form.subnet }}
+                                {% if form.subnet.errors %}<div class="text-danger small">{{ form.subnet.errors.0 }}</div>{% endif %}
+                                <small class="text-muted d-block mt-1">自动扫描子网内所有可用IP</small>
+                            </div>
+                            
+                            <div id="range-fields" style="display: none;" class="col-md-12 mt-2">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label for="{{ form.start_ip.id_for_label }}" class="form-label fw-bold">{{ form.start_ip.label }}</label>
+                                        {{ form.start_ip }}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="{{ form.end_ip.id_for_label }}" class="form-label fw-bold">{{ form.end_ip.label }}</label>
+                                        {{ form.end_ip }}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="single-field" style="display: none;" class="col-md-8 mt-2">
+                                <label for="single-ip" class="form-label fw-bold">IP 地址</label>
+                                <input type="text" name="start_ip" id="single-ip" 
+                                       class="form-control" placeholder="例如: 192.168.1.100">
+                            </div>
+                        </div>
+
+                        <!-- Ping 设置 -->
+                        <hr>
+                        <div id="ping-settings">
+                            <h6><i class="bi bi-wifi me-1"></i> Ping 探测设置</h6>
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="{{ form.ping_count.id_for_label }}" class="form-label fw-bold">{{ form.ping_count.label }}</label>
+                                    {{ form.ping_count }}
+                                    {{ form.ping_count.help_text|safe }}
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="{{ form.ping_timeout.id_for_label }}" class="form-label fw-bold">{{ form.ping_timeout.label }}</label>
+                                    {{ form.ping_timeout }}
+                                    {{ form.ping_timeout.help_text|safe }}
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="{{ form.concurrent.id_for_label }}" class="form-label fw-bold">{{ form.concurrent.label }}</label>
+                                    {{ form.concurrent }}
+                                    {{ form.concurrent.help_text|safe }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 端口扫描设置 (条件显示) -->
+                        <hr id="port-divider" style="display:none;">
+                        <div id="port-settings" style="display:none;">
+                            <h6><i class="bi bi-door-open me-1"></i> 端口扫描设置</h6>
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <label for="{{ form.ports.id_for_label }}" class="form-label fw-bold">{{ form.ports.label }}</label>
+                                    {{ form.ports }}
+                                    {{ form.ports.help_text|safe }}
+                                    
+                                    <!-- 常用端口快捷按钮 -->
+                                    <div class="mt-2 d-flex flex-wrap gap-1">
+                                        <button type="button" onclick="setPorts('22,80,443')" class="btn btn-sm btn-outline-secondary">常用Web/SSH</button>
+                                        <button type="button" onclick="setPorts('21,22,23,25,53,110,143,993,995')" class="btn btn-sm btn-outline-secondary">常用服务</button>
+                                        <button type="button" onclick="setPorts('3389,5900,8080,8443,8888,9090')" class="btn btn-sm btn-outline-secondary">远程/代理</button>
+                                        <button type="button" onclick="setPorts('3306,5432,27017,6379,9200,11211')" class="btn btn-sm btn-outline-secondary">数据库</button>
+                                        <button type="button" onclick="setPorts('1-1024')" class="btn btn-sm btn-outline-secondary">Top 1024</button>
+                                        <button type="button" onclick="setPorts('1-65535')" class="btn btn-sm btn-outline-warning">全端口(慢)</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
+                        {% endif %}
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                            <a href="{% url 'ipam:scan_index' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>返回
+                            </a>
+                            <button type="submit" class="btn btn-primary px-5">
+                                <i class="bi bi-check-circle me-1"></i>创建任务
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 说明卡片 -->
+            <div class="card mt-3">
+                <div class="card-body bg-light">
+                    <h6><i class="bi bi-info-circle me-1"></i> 探测类型说明</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Ping 探测</strong>: 发送ICMP包检测主机是否在线，获取延迟和丢包率</li>
+                        <li><strong>端口扫描</strong>: 检测指定TCP端口的开放状态，可识别常见服务</li>
+                        <li><strong>综合扫描</strong>: 同时执行 Ping + DNS反解 + 端口 + ARP 获取最全面的信息</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 目标类型切换
+document.getElementById('target_type_select').addEventListener('change', function() {
+    const val = this.value;
+    document.getElementById('subnet-field').style.display = val === 'subnet' ? '' : 'none';
+    document.getElementById('range-fields').style.display = val === 'range' ? '' : 'none';
+    document.getElementById('single-field').style.display = val === 'single' ? '' : 'none';
+});
+
+// 任务类型切换 - 显示/隐藏端口设置
+const taskTypeSelect = document.querySelector('#id_task_type');
+taskTypeSelect.addEventListener('change', function() {
+    const portSettings = document.getElementById('port-settings');
+    const portDivider = document.getElementById('port-divider');
+    
+    if (this.value === 'port' || this.value === 'full') {
+        portSettings.style.display = '';
+        portDivider.style.display = '';
+    } else {
+        portSettings.style.display = 'none';
+        portDivider.style.display = 'none';
+    }
+});
+
+// 设置常用端口
+function setPorts(ports) {
+    document.getElementById('id_ports').value = ports;
+}
+
+// 初始化
+if (taskTypeSelect.value === 'port' || taskTypeSelect.value === 'full') {
+    document.getElementById('port-settings').style.display = '';
+    document.getElementById('port-divider').style.display = '';
+}
+</script>
+{% endblock %}

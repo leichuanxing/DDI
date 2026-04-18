@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}用户{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-person-plus"></i> {% if form.instance.pk %}编辑{% else %}新增{% endif %}用户</h4>
+
+<div class="card" style="max-width: 700px;">
+    <div class="card-body">
+        <form method="post" novalidate>{% csrf_token %}
+            <div class="row g-3">
+                {% if not form.instance.pk %}
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">用户名 <span class="text-danger">*</span></label>
+                    {{ form.username }}
+                    {{ form.username.errors }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">密码 <span class="text-danger">*</span></label>
+                    {{ form.password1 }}
+                    {{ form.password1.errors }}
+                </div>
+                {% endif %}
+                
+                <div class="col-md-6">
+                    <label class="form-label">姓名</label>
+                    {{ form.real_name }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">邮箱</label>
+                    {{ form.email }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">手机号</label>
+                    {{ form.phone }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">部门</label>
+                    {{ form.department }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">角色</label>
+                    {{ form.role }}
+                </div>
+                {% if form.instance.pk %}
+                <div class="col-md-6 mt-3 pt-1">
+                    <div class="form-check mt-4">
+                        {{ form.is_active }} <label class="form-check-label">启用/禁用</label>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# ====== 编辑模式：修改密码（可选） ====== #}
+                {% if form.instance.pk %}
+                <div class="col-12 mt-4 pt-3 border-top">
+                    <h6 class="text-secondary mb-3"><i class="bi bi-key me-1"></i>修改密码 <small class="text-muted fw-normal">（留空则不修改）</small></h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">{{ form.new_password1.label }}</label>
+                            {{ form.new_password1 }}
+                            {% if form.new_password1.errors %}
+                                {% for err in form.new_password1.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            {% elif form.new_password1.help_text %}
+                                <div class="form-text text-muted">{{ form.new_password1.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">{{ form.new_password2.label }}</label>
+                            {{ form.new_password2 }}
+                            {% if form.new_password2.errors %}
+                                {% for err in form.new_password2.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% if not form.instance.pk %}
+                <div class="col-md-6 offset-md-6">
+                    <label class="form-label">确认密码</label>
+                    {{ form.password2 }}
+                    {{ form.password2.errors }}
+                </div>
+                {% endif %}
+                
+                <div class="col-12 mt-4 pt-3 border-top">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> 保存</button>
+                    <a href="{% url 'accounts:user_list' %}" class="btn btn-secondary">取消</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

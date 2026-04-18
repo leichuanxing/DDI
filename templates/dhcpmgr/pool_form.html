@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}DHCP地址池{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-wifi"></i> {% if form.instance.pk %}编辑{% else %}新增{% endif %}DHCP地址池</h4>
+    <a href="{% url 'dhcpmgr:pool_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>{% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">地址池名称 <span class="text-danger">*</span></label>
+                    {{ form.name }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">所属子网 <span class="text-danger">*</span></label>
+                    {{ form.subnet }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">起始地址 <span class="text-danger">*</span></label>
+                    {{ form.start_address }}
+                    {{ form.start_address.errors }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">结束地址 <span class="text-danger">*</span></label>
+                    {{ form.end_address }}
+                    {{ form.end_address.errors }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">网关</label>
+                    {{ form.gateway }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">DNS服务器</label>
+                    {{ form.dns_servers }}
+                    <small class="text-muted d-block mt-1">多个用逗号分隔</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">租约时间(秒)</label>
+                    {{ form.lease_time }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">状态</label>
+                    {{ form.status }}
+                </div>
+                <div class="col-md-9">
+                    <label class="form-label">描述</label>
+                    {{ form.description }}
+                </div>
+                
+                {% if form.non_field_errors %}
+                <div class="col-12">
+                    {% for err in form.non_field_errors %}
+                        <div class="alert alert-warning">{{ err }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                <div class="col-12 mt-4 pt-3 border-top">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> 保存</button>
+                    <a href="{% url 'dhcpmgr:pool_list' %}" class="btn btn-secondary">取消</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+
+{% block title %}DNS服务管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-globe"></i> DNS 服务管理</h4>
+</div>
+
+<!-- 服务状态卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                {% if status.running %}
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2"
+                         style="width:48px;height:48px;background:rgba(34,197,94,0.12)">
+                        <i class="bi bi-play-circle-fill fs-4 text-success"></i>
+                    </div>
+                    <div class="text-success fw-bold">运行中</div>
+                    <small class="text-muted">已运行 {{ status.uptime }} 秒</small>
+                {% else %}
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2"
+                         style="width:48px;height:48px;background:rgba(239,68,68,0.1)">
+                        <i class="bi bi-stop-circle-fill fs-4 text-danger"></i>
+                    </div>
+                    <div class="text-danger fw-bold">已停止</div>
+                    <small class="text-muted">点击下方按钮启动</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-arrow-repeat fs-2 text-primary opacity-75 d-block mb-1"></i>
+                <div class="stat-value text-primary">{{ status.total_queries }}</div>
+                <div class="stat-label">累计查询</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-database fs-2 text-warning opacity-75 d-block mb-1"></i>
+                <div class="stat-value text-warning">{{ status.cache_size }}</div>
+                <div class="stat-label">缓存条目</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-collection fs-2 text-info opacity-75 d-block mb-1"></i>
+                <div class="stat-value text-info">{{ zone_count }}</div>
+                <div class="stat-label">区域 / {{ record_count }} 记录</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- 左侧：服务控制 + 转发器配置 -->
+    <div class="col-lg-6">
+        <!-- 服务控制 -->
+        <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-sliders2 me-1"></i> 服务控制</div>
+            <div class="card-body">
+                <form method="post" class="d-inline">{% csrf_token %}
+                    {% if status.running %}
+                        <button type="submit" name="action" value="stop" class="btn btn-outline-danger me-2"
+                                onclick="return confirm('确定停止DNS服务？')">
+                            <i class="bi bi-stop-fill me-1"></i> 停止服务
+                        </button>
+                    {% else %}
+                        <button type="submit" name="action" value="start" class="btn btn-success me-2">
+                            <i class="bi bi-play-fill me-1"></i> 启动服务
+                        </button>
+                    {% endif %}
+                </form>
+                <span class="text-muted small ms-2">
+                    监听端口: <code>{{ settings.listen_port }}</code>
+                    | 地址: <code>{{ settings.listen_address }}</code>
+                </span>
+            </div>
+        </div>
+
+        <!-- 外部转发DNS地址配置 -->
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary bg-opacity-10">
+                <i class="bi bi-arrow-right-circle me-1"></i> 外部转发 DNS 配置
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    当本地无匹配记录时，将查询转发到上游 DNS 服务器。
+                    支持多个转发器，按顺序尝试。
+                </p>
+                <form method="post" id="settingsForm">{% csrf_token %}
+                    <input type="hidden" name="action" value="save_settings">
+
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-router me-1"></i> 转发器地址
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="forwarders" value="{{ settings.forwarders }}"
+                                   class="form-control form-control-lg"
+                                   placeholder="8.8.8.8, 114.114.114.114, 223.5.5.5">
+                            <div class="form-text">多个IP用英文逗号分隔，最多支持10个</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">启用转发</label>
+                            <div class="form-check form-switch mt-1 ps-0">
+                                <input type="checkbox" name="enable_forward" value="true"
+                                       class="form-check-input" role="switch" style="width:48px;height:24px;"
+                                       {% if settings.enable_forward %}checked{% endif %}>
+                                <label class="form-check-label ms-2">
+                                    {% if settings.enable_forward %}<span class="text-success">已开启{% else %}<span class="text-muted">已关闭{% endif %}</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">监听端口</label>
+                            <input type="number" name="listen_port" value="{{ settings.listen_port }}"
+                                   class="form-control" min="1" max="65535">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">默认TTL(秒)</label>
+                            <input type="number" name="default_ttl" value="{{ settings.default_ttl }}"
+                                   class="form-control" min="60" max="86400">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">监听地址</label>
+                            <input type="text" name="listen_address" value="{{ settings.listen_address }}"
+                                   class="form-control" placeholder="0.0.0.0">
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">启用查询缓存</label>
+                            <div class="form-check form-switch mt-1 ps-0">
+                                <input type="checkbox" name="enable_cache" value="true"
+                                       class="form-check-input" role="switch"
+                                       {% if settings.enable_cache %}checked{% endif %}>
+                                <label class="form-check-label ms-2 small text-muted">
+                                    缓存外部查询结果以加速响应
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">缓存过期时间(秒)</label>
+                            <input type="number" name="cache_ttl" value="{{ settings.cache_ttl }}"
+                                   class="form-control" min="30" max="3600">
+                        </div>
+                    </div>
+
+                    <div class="mt-3 pt-3 border-top">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-floppy me-1"></i> 保存配置
+                        </button>
+                        <span class="text-muted small ms-3">修改配置后需重启服务生效</span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：配置摘要 + 常用公共DNS -->
+    <div class="col-lg-6">
+        <!-- 当前配置摘要 -->
+        <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-info-circle me-1"></i> 当前配置摘要</div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-borderless mb-0">
+                    <tbody>
+                        <tr><td class="fw-bold text-muted ps-3" style="width:140px">转发器列表</td>
+                            <td>
+                                {% for fwd in status.forwarders %}
+                                    <code class="me-2">{{ fwd }}</code>{% empty %}
+                                    <span class="text-muted fst-italic">(未配置)</span>
+                                {% endfor %}
+                            </td></tr>
+                        <tr><td class="fw-bold text-muted ps-3">转发状态</td>
+                            <td>
+                                {% if status.enable_forward %}
+                                    <span class="badge rounded-pill bg-success"><i class="bi bi-check-circle me-1"></i>已开启</span>
+                                {% else %}
+                                    <span class="badge rounded-pill bg-secondary">已关闭 - 仅响应本地区域</span>
+                                {% endif %}
+                            </td></tr>
+                        <tr><td class="fw-bold text-muted ps-3">缓存状态</td>
+                            <td>
+                                {% if status.enable_cache %}
+                                    <span class="badge rounded-pill bg-warning text-dark"><i class="bi bi-database me-1"></i>已开启 ({{ status.cache_size }}条)</span>
+                                {% else %}
+                                    <span class="badge rounded-pill bg-secondary">已关闭</span>
+                                {% endif %}
+                            </td></tr>
+                        <tr><td class="fw-bold text-muted ps-3">监听端口</td><td><code>{{ status.listen_port }}</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 常用公共DNS -->
+        <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-bookmark-star me-1"></i> 常用公共 DNS 推荐</div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr><th>DNS名称</th><th>IP地址</th><th>操作</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Google Public DNS</strong></td>
+                            <td><code>8.8.8.8</code>, <code>8.8.4.4</code></td>
+                            <td>
+                                <button class="btn btn-xs btn-outline-primary quick-add" data-ip="8.8.8.8, 8.8.4.4">添加</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>114 DNS (国内)</strong></td>
+                            <td><code>114.114.114.114</code>, <code>114.114.115.115</code></td>
+                            <td>
+                                <button class="btn btn-xs btn-outline-primary quick-add" data-ip="114.114.114.114, 114.114.115.115">添加</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>阿里 DNS (国内)</strong></td>
+                            <td><code>223.5.5.5</code>, <code>223.6.6.6</code></td>
+                            <td>
+                                <button class="btn btn-xs btn-outline-primary quick-add" data-ip="223.5.5.5, 223.6.6.6">添加</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cloudflare DNS</strong></td>
+                            <td><code>1.1.1.1</code>, <code>1.0.0.1</code></td>
+                            <td>
+                                <button class="btn btn-xs btn-outline-primary quick-add" data-ip="1.1.1.1, 1.0.0.1">添加</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Baidu DNS (国内)</strong></td>
+                            <td><code>180.76.76.76</code></td>
+                            <td>
+                                <button class="btn btn-xs btn-outline-primary quick-add" data-ip="180.76.76.76">添加</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 工作流程说明 -->
+        <div class="card">
+            <div class="card-header"><i class="bi bi-diagram-3 me-1"></i> 解析流程</div>
+            <div class="card-body p-3">
+                <div class="d-flex flex-column gap-2">
+                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#eef7ff">
+                        <span class="badge bg-primary rounded-pill">1</span>
+                        <span>接收客户端 DNS 查询请求</span>
+                    </div>
+                    <div class="ms-3"><i class="bi bi-chevron-down text-primary"></i></div>
+                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#f0fdf4">
+                        <span class="badge bg-success rounded-pill">2</span>
+                        <span><strong>本地查找</strong> — 匹配本地区域和记录</span>
+                    </div>
+                    <div class="ms-3"><i class="bi bi-chevron-down text-success"></i></div>
+                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#fefce8">
+                        <span class="badge bg-warning text-dark rounded-pill">3</span>
+                        <span><strong>外部转发</strong> — 本地无记录时转发到上游DNS</span>
+                    </div>
+                    <div class="ms-3"><i class="bi bi-chevron-down text-warning"></i></div>
+                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#faf5ff">
+                        <span class="badge bg-info rounded-pill">4</span>
+                        <span><strong>返回结果</strong> — 缓存并返回给客户端</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.btn-xs { padding: 1px 8px; font-size: 11.5px; border-radius: 4px; }
+.quick-add { cursor: pointer; transition: all .15s; }
+.quick-add:hover { transform: scale(1.05); }
+</style>
+
+<script>
+// 快速添加转发器功能
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.quick-add').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var input = document.querySelector('input[name="forwarders"]');
+            var currentVal = input.value.trim();
+            var newVal = this.getAttribute('data-ip');
+            if (currentVal && !currentVal.endsWith(',')) {
+                input.value = currentVal + ', ' + newVal;
+            } else {
+                input.value = currentVal ? currentVal + ' ' + newVal : newVal;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

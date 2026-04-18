@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}VLAN管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-diagram-3"></i> VLAN管理</h4>
+    <a href="{% url 'ipam:vlan_create' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg"></i> 新增VLAN
+    </a>
+</div>
+
+<!-- 搜索 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-auto flex-grow-1">
+                <input type="text" name="search" value="{{ request.GET.search }}" 
+                       class="form-control form-control-sm" placeholder="搜索VLAN名称或ID...">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 搜索</button>
+                <a href="{% url 'ipam:vlan_list' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>VLAN ID</th>
+                        <th>VLAN名称</th>
+                        <th>所属区域</th>
+                        <th>用途</th>
+                        <th>网关</th>
+                        <th>子网数</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vlan in vlans %}
+                    <tr>
+                        <td><code>{{ vlan.vlan_id }}</code></td>
+                        <td><strong>{{ vlan.name }}</strong></td>
+                        <td>{{ vlan.region.name|default:"-" }}</td>
+                        <td>{{ vlan.purpose|truncatechars:20 }}</td>
+                        <td><code>{{ vlan.gateway|default:"-" }}</code></td>
+                        <td><span class="badge bg-info">{{ vlan.subnets.count }}</span></td>
+                        <td>
+                            <a href="{% url 'ipam:vlan_edit' vlan.pk %}" class="btn btn-sm btn-outline-primary">编辑</a>
+                            <a href="{% url 'ipam:vlan_delete' vlan.pk %}" class="btn btn-sm btn-outline-danger">删除</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center py-4 text-muted">暂无VLAN数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

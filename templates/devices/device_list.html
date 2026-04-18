@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}设备管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-pc-display"></i> 设备与主机管理</h4>
+    <a href="{% url 'devices:device_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增设备</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4 flex-grow-1">
+                <input type="text" name="search" value="{{ request.GET.search }}" 
+                       class="form-control form-control-sm" placeholder="搜索主机名、设备名称或MAC...">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 搜索</button>
+                <a href="{% url 'devices:device_list' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>主机名</th><th>设备名称</th><th>类型</th><th>管理员</th>
+                    <th>部门</th><th>MAC地址</th><th>关联IP</th><th>操作系统</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dev in devices %}
+                <tr>
+                    <td><strong>{{ dev.hostname }}</strong></td>
+                    <td>{{ dev.device_name|truncatechars:18 }}</td>
+                    <td><span class="badge bg-light text-dark">{{ dev.get_device_type_display }}</span></td>
+                    <td>{{ dev.manager|default:"-" }}</td>
+                    <td>{{ dev.department|default:"-" }}</td>
+                    <td><code>{{ dev.mac_address|default:"-" }}</code></td>
+                    <td><code>{{ dev.ip_address.ip_address|default:"未关联" }}</code></td>
+                    <td class="small">{{ dev.operating_system|truncatechars:12 }}</td>
+                    <td>
+                        <a href="{% url 'devices:device_detail' dev.pk %}" class="btn btn-sm btn-outline-primary">详情</a>
+                        <a href="{% url 'devices:device_edit' dev.pk %}" class="btn btn-sm btn-outline-secondary">编辑</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center py-4 text-muted">暂无设备数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        {% if is_paginated %}
+        <div class="card-footer">
+            <nav class="d-flex justify-content-center"><ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">上一页</a></li>{% endif %}
+                <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">下一页</a></li>{% endif %}
+            </ul></nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
