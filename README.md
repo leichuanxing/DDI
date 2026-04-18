@@ -371,8 +371,7 @@ logs
 - [ ] Docker 容器化部署与 Compose 编排
 
 ---
-
-![alt text](8c0e6f322ceded647dbc0ba07b8c2802.png)
+## 联系作者
 ![alt text](bb054614a6958e5f989de649e626b4bf.png)
 
 ## 十三、许可证
