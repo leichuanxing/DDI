@@ -34,7 +34,7 @@
 ## 二、功能模块总览
 
 ### 界面预览
-![alt text](/pic/home_page.png)
+![alt text](./pic/home_page.png)
 
 ### 各模块详细说明
 
@@ -365,7 +365,7 @@ logs
 ---
 
 ## 联系作者(请备注软件名称)
-![微信二维码](/pic/wx.png)
+![微信二维码](./pic/wx.png)
 
 ---
 
