@@ -128,14 +128,21 @@ class ScanTaskForm(forms.ModelForm):
         """自定义校验 - 根据目标类型验证必填字段，检查IP范围和端口配置"""
         cleaned_data = super().clean()
         target_type = cleaned_data.get('target_type')
-        
+        task_type = cleaned_data.get('task_type')
+
+        # 交换机ARP获取不需要目标类型相关校验
+        if task_type == 'switch_arp':
+            if not cleaned_data.get('switch_device'):
+                raise forms.ValidationError({'switch_device': '交换机ARP获取必须选择目标交换机'})
+            return cleaned_data
+
         if target_type == 'subnet':
             if not cleaned_data.get('subnet'):
                 raise forms.ValidationError({'subnet': '选择子网类型时必须指定目标子网'})
         elif target_type == 'range':
             if not cleaned_data.get('start_ip') or not cleaned_data.get('end_ip'):
                 raise forms.ValidationError({'start_ip': '指定IP范围时需要填写起始和结束IP'})
-            
+
             # 验证IP格式
             try:
                 from common.ip_utils import ip_to_int
@@ -145,22 +152,16 @@ class ScanTaskForm(forms.ModelForm):
                     raise forms.ValidationError('IP范围过大，单次最多扫描65535个地址')
             except Exception as e:
                 raise forms.ValidationError(str(e))
-                
+
         elif target_type == 'single':
             if not cleaned_data.get('start_ip'):
                 raise forms.ValidationError({'start_ip': '单个IP模式时需要填写IP地址'})
-        
-        task_type = cleaned_data.get('task_type')
+
         ports = cleaned_data.get('ports')
-        
+
         if task_type in ('port', 'full') and not ports:
             raise forms.ValidationError({'ports': '端口扫描或综合扫描时需要指定端口'})
-        
-        # 交换机ARP类型校验
-        if task_type == 'switch_arp':
-            if not cleaned_data.get('switch_device'):
-                raise forms.ValidationError({'switch_device': '交换机ARP获取必须选择目标交换机'})
-        
+
         return cleaned_data
 
 

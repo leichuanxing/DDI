@@ -685,6 +685,14 @@ class DNSServer:
         import time as _time
         t_start = _time.time()
 
+        # 确保数据库连接有效（长时间运行线程需要定期检查）
+        from django.db import connection
+        try:
+            connection.ensure_connection()
+        except Exception as e:
+            logger.warning(f"数据库连接异常，尝试重连: {e}")
+            connection.close()
+
         query = self.parse_dns_packet(data)
         if not query or not query['questions']:
             return
@@ -869,22 +877,79 @@ class DNSServer:
                    f"转发器: {self._forwarders}")
 
         buffer_size = 4096
+        consecutive_errors = 0
+        MAX_CONSECUTIVE_ERRORS = 10
+
         while self.running:
             try:
                 self.server_socket.settimeout(1.0)
                 data, addr = self.server_socket.recvfrom(buffer_size)
                 if data:
                     self._handle_client(data, addr)
+                # 成功处理请求后重置错误计数
+                consecutive_errors = 0
             except socket.timeout:
                 continue
             except OSError as e:
+                # 区分致命错误和暂时性错误
+                fatal_errors = (
+                    'Bad file descriptor',     # socket已被关闭
+                    'Address family not',      # 地址族不支持
+                    'Invalid argument',        # 无效参数(通常socket已损坏)
+                    'Socket is already',       # socket已绑定到其他地方
+                )
+                is_fatal = any(msg in str(e) for msg in fatal_errors)
+
+                if is_fatal:
+                    logger.error(f"致命Socket错误，停止服务: {e}")
+                    self.running = False
+                    break
+
+                consecutive_errors += 1
                 if self.running:
-                    logger.error(f"Socket错误: {e}")
-                break
+                    logger.warning(f"Socket暂时性错误 ({consecutive_errors}/{MAX_CONSECUTIVE_ERRORS}): {e}")
+
+                # 连续多次非致命错误后尝试重建socket
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    logger.error(f"连续{MAX_CONSECUTIVE_ERRORS}次Socket错误，尝试重建...")
+                    self._rebuild_socket(settings)
+                    consecutive_errors = 0
+
             except Exception as e:
-                logger.error(f"处理DNS请求异常: {e}")
+                consecutive_errors += 1
+                logger.error(f"处理DNS请求异常 ({consecutive_errors}次): {e}")
+                # 连续异常过多时记录并继续
+                if consecutive_errors > MAX_CONSECUTIVE_ERRORS * 2:
+                    logger.critical(f"连续异常过多({consecutive_errors})，停止服务以防止资源耗尽")
+                    break
+                import time as _time
+                _time.sleep(min(consecutive_errors * 0.1, 2.0))  # 指数退避
 
         logger.info("DNS服务已停止")
+
+    def _rebuild_socket(self, settings):
+        """重建socket连接（用于恢复暂时性故障）"""
+        try:
+            if self.server_socket:
+                try:
+                    self.server_socket.close()
+                except:
+                    pass
+
+            import time as _time
+            _time.sleep(1)  # 短暂等待释放端口
+
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            bind_addr = settings.get('listen_address', '0.0.0.0') or '0.0.0.0'
+            bind_port = settings.get('listen_port', 53)
+            self.server_socket.bind((str(bind_addr), bind_port))
+            logger.info("Socket重建成功")
+            return True
+        except Exception as e:
+            logger.error(f"Socket重建失败: {e}")
+            self.running = False
+            return False
 
     def start(self, bind_ip='0.0.0.0', bind_port=53):
         """启动 DNS 服务"""

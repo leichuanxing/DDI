@@ -116,7 +116,7 @@ class DHCPLease(models.Model):
     pool = models.ForeignKey(DHCPPool, on_delete=models.CASCADE, null=True, blank=True,
                              related_name='leases', verbose_name='所属地址池')
     created_at = models.DateTimeField('记录时间', auto_now_add=True)
-    
+
     class Meta:
         verbose_name = 'DHCP租约'
         verbose_name_plural = verbose_name
@@ -142,3 +142,46 @@ class DHCPLease(models.Model):
         """释放租约 - 将状态置为released"""
         self.status = 'released'
         self.save()
+
+
+class DHCPLog(models.Model):
+    """DHCP客户端地址获取日志 - 记录每次DISCOVER/OFFER/REQUEST/ACK/NAK/RELEASE交互"""
+
+    MSG_TYPE_CHOICES = (
+        ('discover', 'DISCOVER'),
+        ('offer', 'OFFER'),
+        ('request', 'REQUEST'),
+        ('ack', 'ACK'),
+        ('nak', 'NAK'),
+        ('release', 'RELEASE'),
+    )
+
+    STATUS_CHOICES = (
+        ('success', '成功'),
+        ('fail', '失败'),
+        ('ignored', '忽略'),
+    )
+
+    msg_type = models.CharField('消息类型', max_length=20, choices=MSG_TYPE_CHOICES)
+    mac_address = models.CharField('MAC地址', max_length=17)
+    ip_address = models.GenericIPAddressField('分配IP地址', null=True, blank=True)
+    client_addr = models.GenericIPAddressField('客户端来源IP')
+    pool_name = models.CharField('地址池名称', max_length=200, blank=True)
+    server_id = models.GenericIPAddressField('Server ID', null=True, blank=True)
+    status = models.CharField('处理结果', max_length=20, choices=STATUS_CHOICES, default='success')
+    detail = models.TextField('详情', blank=True, help_text='附加信息，如失败原因等')
+    created_at = models.DateTimeField('记录时间', db_index=True, auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'DHCP日志'
+        verbose_name_plural = verbose_name
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['mac_address']),
+            models.Index(fields=['ip_address']),
+            models.Index(fields=['msg_type']),
+        ]
+
+    def __str__(self):
+        return f"[{self.created_at.strftime('%m-%d %H:%M:%S')}] {self.get_msg_type_display()} {self.mac_address} -> {self.ip_address or '-'} ({self.get_status_display()})"

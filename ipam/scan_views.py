@@ -46,9 +46,13 @@ def create_scan_task(request):
             task.created_by = request.user
             task.status = 'pending'
             
-            # 计算目标数量
-            target_ips = task.get_target_ips()
-            task.total_targets = len(target_ips)
+            # 计算目标数量（交换机ARP类型特殊处理）
+            if task.task_type == 'switch_arp':
+                task.total_targets = 1  # 交换机设备本身作为目标
+                task.target_type = 'switch'
+            else:
+                target_ips = task.get_target_ips()
+                task.total_targets = len(target_ips)
             
             task.save()
             
@@ -583,6 +587,7 @@ def quick_allocate_ip(request):
     device_name = request.POST.get('device_name', '')
     owner = request.POST.get('owner', '')
     department = request.POST.get('department', '')
+    mac_address = request.POST.get('mac_address', '')
     
     if not ip_addr:
         return JsonResponse({'success': False, 'error': 'IP地址不能为空'}, status=400)
@@ -621,6 +626,7 @@ def quick_allocate_ip(request):
                 'device_name': device_name,
                 'owner': owner,
                 'department': department,
+                'mac_address': mac_address,
                 'created_by': request.user,
             }
         )

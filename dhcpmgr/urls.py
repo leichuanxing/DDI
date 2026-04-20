@@ -1,17 +1,22 @@
 """DHCP管理模块 - URL路由配置"""
 
 from django.urls import path
+from django.views.generic import RedirectView
 from .views import (
     PoolListView, PoolDetailView, PoolCreateView, PoolUpdateView, PoolDeleteView,
     toggle_pool_status,
     ExclusionCreateView, ExclusionUpdateView, ExclusionDeleteView,
     LeaseListView, lease_create, lease_release, check_expired_leases, release_all_leases,
-    dhcp_service_page, dhcp_service_start, dhcp_service_stop, dhcp_service_status
+    dhcp_service_page, dhcp_service_start, dhcp_service_stop, dhcp_service_status,
+    DHCPLogListView, dhcp_log_clear
 )
 
 app_name = 'dhcpmgr'
 
 urlpatterns = [
+    # DHCP管理根路径 - 重定向到地址池列表
+    path('', RedirectView.as_view(pattern_name='dhcpmgr:pool_list', permanent=False), name='index'),
+
     # DHCP地址池管理
     path('pools/', PoolListView.as_view(), name='pool_list'),
     path('pools/create/', PoolCreateView.as_view(), name='pool_create'),
@@ -37,4 +42,8 @@ urlpatterns = [
     path('api/service/start/', dhcp_service_start, name='service_start'),
     path('api/service/stop/', dhcp_service_stop, name='service_stop'),
     path('api/service/status/', dhcp_service_status, name='service_status'),
+
+    # DHCP地址获取日志
+    path('logs/', DHCPLogListView.as_view(), name='log_list'),
+    path('logs/clear/', dhcp_log_clear, name='log_clear'),
 ]

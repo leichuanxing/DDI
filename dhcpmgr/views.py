@@ -10,7 +10,7 @@ from django.utils.decorators import method_decorator
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.http import JsonResponse
-from .models import DHCPPool, DHCPExclusion, DHCPLease
+from .models import DHCPPool, DHCPExclusion, DHCPLease, DHCPLog
 from .forms import DHCPPoolForm, DHCPExclusionForm, DHCPLeaseForm, DHCPLeaseSearchForm
 from common.logger import log_operation
 from django.utils import timezone
@@ -122,7 +122,7 @@ class ExclusionCreateView(CreateView):
         return initial
     
     def form_valid(self, form):
-        response = super().form_valid(form)
+        self.object = form.save()
         messages.success(self.request, '排除地址段添加成功')
         log_operation(self.request.user, '新增', 'dhcp', 'exclusion', '', str(self.object))
         # 跳转到地址池详情页
@@ -145,14 +145,18 @@ class ExclusionDeleteView(DeleteView):
     """删除排除地址视图 - 删除后跳回地址池详情页"""
     model = DHCPExclusion
     template_name = 'dhcpmgr/confirm_delete.html'
-    
+
+    def get_success_url(self):
+        if self.object and self.object.pool_id:
+            return reverse_lazy('dhcpmgr:pool_detail', kwargs={'pk': self.object.pool_id})
+        return reverse_lazy('dhcpmgr:pool_list')
+
     def delete(self, request, *args, **kwargs):
         obj = self.get_object()
-        pool_pk = obj.pool.pk
         log_operation(request.user, '删除', 'dhcp', 'exclusion', '', str(obj))
         response = super().delete(request, *args, **kwargs)
         messages.success(request, '排除地址段已删除')
-        return redirect('dhcpmgr:pool_detail', pk=pool_pk)
+        return response
 
 
 # ========== 租约管理 ==========
@@ -405,3 +409,60 @@ def dhcp_service_status(request):
     server = get_dhcp_server()
     
     return JsonResponse(server.get_status())
+
+
+# ========== DHCP地址获取日志 ==========
+@method_decorator([login_required], name='dispatch')
+class DHCPLogListView(ListView):
+    """DHCP地址获取日志 - 显示客户端DISCOVER/OFFER/REQUEST/ACK/NAK/RELEASE交互记录"""
+    model = DHCPLog
+    template_name = 'dhcpmgr/log_list.html'
+    context_object_name = 'logs'
+    paginate_by = 50
+
+    def get_queryset(self):
+        """支持按MAC/IP/消息类型筛选"""
+        queryset = super().get_queryset()
+        
+        search = self.request.GET.get('search', '')
+        if search:
+            queryset = queryset.filter(
+                mac_address__icontains=search
+            ) | queryset.filter(
+                ip_address__icontains=search
+            )
+
+        msg_type = self.request.GET.get('msg_type', '')
+        if msg_type:
+            queryset = queryset.filter(msg_type=msg_type)
+
+        status = self.request.GET.get('status', '')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['msg_type_choices'] = DHCPLog.MSG_TYPE_CHOICES
+        context['status_choices'] = DHCPLog.STATUS_CHOICES
+        context['search'] = self.request.GET.get('search', '')
+        context['current_msg_type'] = self.request.GET.get('msg_type', '')
+        context['current_status'] = self.request.GET.get('status', '')
+        # 统计信息
+        from django.db.models import Count
+        context['total_count'] = DHCPLog.objects.count()
+        context['today_count'] = DHCPLog.objects.filter(
+            created_at__date__gte=timezone.now().date()
+        ).count()
+        return context
+
+
+@login_required
+def dhcp_log_clear(request):
+    """清空DHCP日志"""
+    if request.method == 'POST':
+        count = DHCPLog.objects.all().delete()[0]
+        messages.success(request, f'已清空 {count} 条DHCP日志')
+        log_operation(request.user, '清空日志', 'dhcp', 'log', '', f'删除{count}条')
+    return redirect('dhcpmgr:log_list')

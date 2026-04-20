@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}DHCP地址获取日志{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-journal-text"></i> DHCP地址获取日志</h4>
+    <div>
+        <span class="badge bg-secondary me-2">总计 {{ total_count }} 条</span>
+        <span class="bg-info text-dark badge rounded-pill px-3 py-1">今日 {{ today_count }} 条</span>
+        {% if total_count > 0 %}
+        <form method="post" action="{% url 'dhcpmgr:log_clear' %}" class="d-inline"
+              onsubmit="return confirm('确定清空所有DHCP日志？此操作不可撤销！')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm ms-2">
+                <i class="bi bi-trash"></i> 清空日志
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" name="search" value="{{ search }}" 
+                       class="form-control form-control-sm" placeholder="搜索IP或MAC地址...">
+            </div>
+            <div class="col-md-2">
+                <select name="msg_type" class="form-select form-select-sm">
+                    <option value="">全部消息类型</option>
+                    {% for v, label in msg_type_choices %}
+                    <option value="{{ v }}" {% if current_msg_type == v %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部结果</option>
+                    {% for v, label in status_choices %}
+                    <option value="{% if current_status == v %}{% else %}{{ v }}{% endif %}"
+                            {% if current_status == v %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 搜索</button>
+                <a href="{% url 'dhcpmgr:log_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-counterclockwise"></i> 重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:150px;">时间</th>
+                    <th style="width:80px;">类型</th>
+                    <th style="width:130px;">MAC地址</th>
+                    <th style="width:120px;">分配IP</th>
+                    <th style="width:110px;">客户端来源</th>
+                    <th style="width:100px;">地址池</th>
+                    <th style="width:90px;">Server ID</th>
+                    <th style="width:60px;text-align:center;">结果</th>
+                    <th>详情</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="text-nowrap small">{{ log.created_at|date:"m-d H:i:s" }}</td>
+                    <td>
+                        <span class="badge 
+                            {% if log.msg_type == 'ack' %}bg-success
+                            {% elif log.msg_type == 'nak' or log.msg_type == 'release' %}bg-danger
+                            {% elif log.msg_type == 'discover' %}bg-info
+                            {% elif log.msg_type == 'offer' %}bg-warning text-dark
+                            {% elif log.msg_type == 'request' %}bg-primary
+                            {% else %}bg-secondary{% endif %}">
+                            {{ log.get_msg_type_display }}
+                        </span>
+                    </td>
+                    <td class="font-monospace small text-dark">{{ log.mac_address }}</td>
+                    <td>{% if log.ip_address %}<code>{{ log.ip_address }}</code>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td class="font-monospace small">{% if log.client_addr %}<code>{{ log.client_addr }}</code>{% else %}-{% endif %}</td>
+                    <td class="small">{% if log.pool_name %}{{ log.pool_name }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td class="font-monospace small">{% if log.server_id %}<code>{{ log.server_id }}</code>{% else %}-{% endif %}</td>
+                    <td class="text-center">
+                        {% if log.status == 'success' %}
+                        <span class="badge bg-success rounded-pill">成功</span>
+                        {% elif log.status == 'fail' %}
+                        <span class="badge bg-danger rounded-pill">失败</span>
+                        {% elif log.status == 'ignored' %}
+                        <span class="badge bg-secondary rounded-pill">忽略</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                        title="{{ log.detail }}">
+                        {{ log.detail }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center py-4 text-muted">暂无日志记录</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if is_paginated %}
+<nav aria-label="分页导航" class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&search={{ search }}&msg_type={{ current_msg_type }}&status={{ current_status }}">上一页</a></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&search={{ search }}&msg_type={{ current_msg_type }}&status={{ current_status }}">下一页</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}
