@@ -146,7 +146,7 @@ class DNSRecord(models.Model):
     
     def disable(self):
         """禁用记录"""
-        status = 'disabled'
+        self.status = 'disabled'
         self.save()
 
 
