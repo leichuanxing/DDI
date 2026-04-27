@@ -1,4 +1,4 @@
-# 合力数据 DDI 管理系统 v2.0
+# 合力数据 DDI 管理系统 v1.0
 
 <p align="center">
   <strong>DDI (DNS + IPAM) 网络资源统一管理平台 — 集成 BIND9</strong>
