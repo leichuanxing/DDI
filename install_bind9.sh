@@ -1,23 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BIND_VERSION="9.16.23"
-
-# 是否自动开放防火墙 DNS 服务
+BIND_VERSION="${BIND_VERSION:-9.16.23}"
 OPEN_FIREWALL="${OPEN_FIREWALL:-yes}"
-
-# 是否锁定版本。默认不锁定，避免影响后续系统安全更新。
 ENABLE_VERSIONLOCK="${ENABLE_VERSIONLOCK:-no}"
-
-# 允许递归查询的内网地址段，按需修改
-ALLOW_RECURSION='127.0.0.1; 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16;'
-
-# 可选上游转发 DNS。
-# 使用示例：
-# FORWARDERS="223.5.5.5; 114.114.114.114;" bash install_bind_9_16_23_rhel9.sh
 FORWARDERS="${FORWARDERS:-}"
 
-BACKUP_DIR="/root/named_backup_$(date +%F_%H%M%S)"
+ALLOW_RECURSION="${ALLOW_RECURSION:-127.0.0.1; 10.0.0.0/8; 172.16.0.0/12; 192.168.0.0/16;}"
+
+BACKUP_DIR="/root/bind_install_backup_$(date +%F_%H%M%S)"
 
 log() {
     echo -e "\033[1;32m[$(date '+%F %T')] $*\033[0m"
@@ -27,90 +18,175 @@ warn() {
     echo -e "\033[1;33m[WARN] $*\033[0m"
 }
 
-die() {
+err() {
     echo -e "\033[1;31m[ERROR] $*\033[0m" >&2
+}
+
+die() {
+    err "$*"
     exit 1
 }
 
 if [[ "$EUID" -ne 0 ]]; then
-    die "请使用 root 用户执行本脚本。"
+    die "请使用 root 用户执行脚本"
 fi
 
-if [[ ! -r /etc/os-release ]]; then
-    die "无法识别系统版本，未找到 /etc/os-release。"
+if [[ ! -f /etc/os-release ]]; then
+    die "无法识别系统版本，未找到 /etc/os-release"
 fi
 
 . /etc/os-release
 
 OS_MAJOR="${VERSION_ID%%.*}"
+OS_ID="${ID:-unknown}"
+OS_LIKE="${ID_LIKE:-}"
+
+log "当前系统：${PRETTY_NAME:-unknown}"
 
 if [[ "$OS_MAJOR" != "9" ]]; then
-    die "当前系统是 ${PRETTY_NAME:-unknown}，本脚本只适配 Red Hat/Rocky/AlmaLinux 9。"
+    die "当前系统不是 9 系版本，本脚本仅支持 Rocky 9 / Red Hat 9 / RHEL 9 兼容系统"
 fi
 
-case " ${ID:-} ${ID_LIKE:-} " in
-    *rhel*|*rocky*|*almalinux*|*centos*|*fedora*)
-        log "当前系统：${PRETTY_NAME}"
+case " ${OS_ID} ${OS_LIKE} " in
+    *rocky*|*rhel*|*almalinux*|*ol*|*centos*|*fedora*)
+        log "系统类型检查通过"
         ;;
     *)
-        warn "当前系统为 ${PRETTY_NAME:-unknown}，不是典型 RHEL 9 兼容发行版，请谨慎执行。"
+        warn "当前系统不是典型 RHEL 9 兼容发行版，继续执行前请确认兼容 DNF/RPM"
         ;;
 esac
+
+log "创建备份目录：${BACKUP_DIR}"
+mkdir -p "${BACKUP_DIR}"
+
+log "停止旧 named 服务"
+
+systemctl stop named 2>/dev/null || true
+systemctl disable named 2>/dev/null || true
+systemctl reset-failed named 2>/dev/null || true
+
+if pgrep -x named >/dev/null 2>&1; then
+    pkill -x named || true
+    sleep 2
+fi
+
+if pgrep -x named >/dev/null 2>&1; then
+    pkill -9 -x named || true
+fi
+
+log "备份现有配置"
+
+for file in \
+    /etc/named.conf \
+    /etc/rndc.key \
+    /etc/rndc.conf \
+    /etc/named.rfc1912.zones \
+    /etc/named.root.key \
+    /etc/sysconfig/named \
+    /etc/systemd/system/named.service \
+    /usr/lib/systemd/system/named.service
+do
+    if [[ -e "$file" ]]; then
+        cp -a "$file" "${BACKUP_DIR}/$(basename "$file").bak" || true
+        log "已备份：$file"
+    fi
+done
+
+if [[ -d /var/named ]]; then
+    cp -a /var/named "${BACKUP_DIR}/var_named.bak" 2>/dev/null || true
+    log "已备份：/var/named"
+fi
 
 log "刷新 DNF 缓存"
 dnf makecache -y
 
-log "检查当前仓库是否存在 bind ${BIND_VERSION}"
+log "检查仓库中是否存在 bind ${BIND_VERSION}"
+
 if ! dnf --showduplicates list bind 2>/dev/null | awk '{print $2}' | grep -qE "(^|:)${BIND_VERSION}-"; then
-    echo
-    warn "当前启用仓库中未发现 bind ${BIND_VERSION}。当前可见版本如下："
+    warn "当前启用仓库中未发现 bind ${BIND_VERSION}"
+    echo "当前仓库可用 bind 版本如下："
     dnf --showduplicates list bind || true
-    echo
-    die "请检查 BaseOS/AppStream 仓库、RHEL 订阅、Rocky 镜像源是否可用。"
+    die "请检查 Rocky BaseOS/AppStream、RHEL 订阅或本地 YUM 源是否包含 bind ${BIND_VERSION}"
 fi
 
-log "安装 BIND ${BIND_VERSION} 及常用工具"
+log "安装 BIND ${BIND_VERSION}"
+
 dnf install -y \
     "bind-${BIND_VERSION}*" \
     "bind-utils-${BIND_VERSION}*" \
     "bind-dnssec-utils-${BIND_VERSION}*"
 
+log "检查 named 命令"
+
+command -v named >/dev/null 2>&1 || die "named 命令不存在"
+command -v named-checkconf >/dev/null 2>&1 || die "named-checkconf 命令不存在"
+command -v rndc-confgen >/dev/null 2>&1 || die "rndc-confgen 命令不存在"
+command -v dig >/dev/null 2>&1 || die "dig 命令不存在"
+
 log "验证 named 版本"
+
 named -v
 
 if ! named -v | grep -q "${BIND_VERSION}"; then
-    die "当前 named 版本不是 ${BIND_VERSION}，请检查软件源。"
+    die "当前 named 版本不是 ${BIND_VERSION}"
 fi
 
-log "备份原有配置到 ${BACKUP_DIR}"
-mkdir -p "${BACKUP_DIR}"
+log "确认 named 用户和组"
 
-for file in /etc/named.conf /etc/named.rfc1912.zones /etc/named.root.key; do
-    if [[ -e "$file" ]]; then
-        cp -a "$file" "${BACKUP_DIR}/"
-    fi
-done
+getent group named >/dev/null 2>&1 || groupadd -r named
+getent passwd named >/dev/null 2>&1 || useradd -r -g named -d /var/named -s /sbin/nologin named
 
-log "准备目录权限"
+log "生成 /etc/rndc.key"
+
+rm -f /etc/rndc.key
+rndc-confgen -a -c /etc/rndc.key
+
+chown root:named /etc/rndc.key
+chmod 640 /etc/rndc.key
+
+log "创建并修复 BIND 目录权限"
+
+mkdir -p /var/named
 mkdir -p /var/named/data
 mkdir -p /var/named/dynamic
 mkdir -p /var/named/slaves
-mkdir -p /run/named
 mkdir -p /var/log/named
+mkdir -p /run/named
 
+# 关键修复点：
+# /var/named 必须允许 named 组写入，否则会报：
+# directory '/var/named' is not writable
 chown root:named /var/named
-chmod 750 /var/named
+chmod 770 /var/named
 
-chown -R named:named /var/named/data /var/named/dynamic /var/named/slaves /run/named /var/log/named
-chmod 750 /var/named/data /var/named/dynamic /var/named/slaves /run/named /var/log/named
+chown -R named:named /var/named/data
+chown -R named:named /var/named/dynamic
+chown -R named:named /var/named/slaves
+chown -R named:named /var/log/named
+chown -R named:named /run/named
+
+chmod 770 /var/named/data
+chmod 770 /var/named/dynamic
+chmod 770 /var/named/slaves
+chmod 750 /var/log/named
+chmod 755 /run/named
+
+log "准备 named.ca 根提示文件"
 
 if [[ ! -f /var/named/named.ca ]]; then
-    warn "未发现 /var/named/named.ca，尝试从 internic 下载根提示文件。"
-    curl -fsSL -o /var/named/named.ca https://www.internic.net/domain/named.root || \
-        die "下载 named.ca 失败，请检查服务器网络。"
-    chown root:named /var/named/named.ca
-    chmod 640 /var/named/named.ca
+    if ls /usr/share/doc/bind*/named.ca >/dev/null 2>&1; then
+        cp -a /usr/share/doc/bind*/named.ca /var/named/named.ca
+    else
+        warn "未找到本地 named.ca，尝试从 internic 下载"
+        curl -fsSL -o /var/named/named.ca https://www.internic.net/domain/named.root || \
+            die "无法获取 named.ca，请检查网络或手工放置 /var/named/named.ca"
+    fi
 fi
+
+chown root:named /var/named/named.ca
+chmod 640 /var/named/named.ca
+
+log "生成 /etc/named.conf"
 
 if [[ -n "${FORWARDERS}" ]]; then
     FORWARDERS_BLOCK="forwarders { ${FORWARDERS} };"
@@ -118,7 +194,11 @@ else
     FORWARDERS_BLOCK=""
 fi
 
-log "生成 /etc/named.conf"
+if [[ -f /etc/crypto-policies/back-ends/bind.config ]]; then
+    CRYPTO_POLICY_INCLUDE='include "/etc/crypto-policies/back-ends/bind.config";'
+else
+    CRYPTO_POLICY_INCLUDE=""
+fi
 
 cat > /etc/named.conf <<EOF_CONF
 //
@@ -132,7 +212,9 @@ acl "internal_networks" {
 
 options {
     listen-on port 53 { any; };
-    listen-on-v6 port 53 { any; };
+
+    // 默认关闭 IPv6 监听，避免系统禁用 IPv6 时启动失败
+    listen-on-v6 { none; };
 
     directory       "/var/named";
     dump-file       "/var/named/data/cache_dump.db";
@@ -147,7 +229,7 @@ options {
     allow-recursion { internal_networks; };
     allow-query-cache { internal_networks; };
 
-    dnssec-validation yes;
+    dnssec-validation auto;
 
     managed-keys-directory "/var/named/dynamic";
     pid-file "/run/named/named.pid";
@@ -155,12 +237,17 @@ options {
 
     ${FORWARDERS_BLOCK}
 
-    include "/etc/crypto-policies/back-ends/bind.config";
+    ${CRYPTO_POLICY_INCLUDE}
+};
+
+controls {
+    inet 127.0.0.1 port 953
+        allow { 127.0.0.1; } keys { "rndc-key"; };
 };
 
 logging {
     channel default_debug {
-        file "data/named.run";
+        file "/var/named/data/named.run";
         severity dynamic;
     };
 };
@@ -170,56 +257,160 @@ zone "." IN {
     file "named.ca";
 };
 
-include "/etc/named.rfc1912.zones";
-include "/etc/named.root.key";
+include "/etc/rndc.key";
 EOF_CONF
 
 chown root:named /etc/named.conf
 chmod 640 /etc/named.conf
 
+log "生成 /etc/sysconfig/named"
+
+cat > /etc/sysconfig/named <<'EOF_SYSCONFIG'
+OPTIONS=""
+EOF_SYSCONFIG
+
+chmod 644 /etc/sysconfig/named
+
+log "生成稳定版 systemd named.service"
+
+cat > /etc/systemd/system/named.service <<'EOF_SERVICE'
+[Unit]
+Description=BIND DNS Server
+Documentation=man:named(8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+EnvironmentFile=-/etc/sysconfig/named
+
+ExecStartPre=/usr/bin/install -d -o named -g named -m 0755 /run/named
+ExecStartPre=/usr/bin/install -d -o root -g named -m 0770 /var/named
+ExecStartPre=/usr/bin/install -d -o named -g named -m 0770 /var/named/data
+ExecStartPre=/usr/bin/install -d -o named -g named -m 0770 /var/named/dynamic
+ExecStartPre=/usr/bin/install -d -o named -g named -m 0770 /var/named/slaves
+ExecStartPre=/usr/sbin/named-checkconf -z /etc/named.conf
+
+ExecStart=/usr/sbin/named -u named -c /etc/named.conf $OPTIONS
+ExecReload=/usr/sbin/rndc reload
+ExecStop=/usr/sbin/rndc stop
+
+PIDFile=/run/named/named.pid
+Restart=on-failure
+RestartSec=3
+
+LimitNOFILE=1048576
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target
+EOF_SERVICE
+
+chmod 644 /etc/systemd/system/named.service
+
 log "恢复 SELinux 上下文"
-restorecon -Rv /etc/named.conf /var/named /run/named /var/log/named 2>/dev/null || true
+
+restorecon -Rv \
+    /etc/named.conf \
+    /etc/rndc.key \
+    /etc/sysconfig/named \
+    /etc/systemd/system/named.service \
+    /var/named \
+    /var/log/named \
+    /run/named 2>/dev/null || true
 
 log "检查 BIND 配置"
+
 named-checkconf -z /etc/named.conf
 
-log "启动 named 并设置开机自启"
-systemctl enable --now named
+log "检查 53 端口占用"
 
-log "处理防火墙"
-if [[ "${OPEN_FIREWALL}" == "yes" ]] && systemctl is-active --quiet firewalld; then
-    firewall-cmd --permanent --add-service=dns
-    firewall-cmd --reload
-    log "已开放防火墙 DNS 服务。"
-else
-    warn "firewalld 未运行或 OPEN_FIREWALL!=yes，未修改防火墙。"
+if ss -lntup | grep ':53' | grep -Ev 'named|127.0.0.53' >/dev/null 2>&1; then
+    warn "检测到 53 端口可能被其他服务占用"
+    ss -lntup | grep ':53' || true
+
+    warn "尝试停止常见冲突服务"
+
+    systemctl stop systemd-resolved 2>/dev/null || true
+    systemctl disable systemd-resolved 2>/dev/null || true
+
+    systemctl stop dnsmasq 2>/dev/null || true
+    systemctl disable dnsmasq 2>/dev/null || true
+
+    systemctl stop unbound 2>/dev/null || true
+    systemctl disable unbound 2>/dev/null || true
+fi
+
+log "重新加载 systemd"
+
+systemctl daemon-reload
+systemctl reset-failed named 2>/dev/null || true
+
+log "启动 named 并设置开机自启"
+
+systemctl enable named
+
+if ! systemctl restart named; then
+    err "named 启动失败，输出最近日志："
+    journalctl -u named -n 120 --no-pager || true
+
+    echo
+    err "尝试以前台方式启动 named，输出直接错误："
+    timeout 15s /usr/sbin/named -g -u named -c /etc/named.conf || true
+
+    die "named 启动失败"
+fi
+
+log "配置防火墙"
+
+if [[ "${OPEN_FIREWALL}" == "yes" ]]; then
+    if systemctl is-active --quiet firewalld; then
+        firewall-cmd --permanent --add-service=dns
+        firewall-cmd --reload
+        log "已开放 firewalld DNS 服务"
+    else
+        warn "firewalld 未运行，跳过防火墙配置"
+    fi
 fi
 
 if [[ "${ENABLE_VERSIONLOCK}" == "yes" ]]; then
-    warn "启用 versionlock 可能会阻止后续安全更新，请确认这是你的预期。"
-    if ! rpm -q python3-dnf-plugin-versionlock >/dev/null 2>&1; then
-        dnf install -y python3-dnf-plugin-versionlock || true
-    fi
+    log "启用 BIND 版本锁定"
+
+    dnf install -y python3-dnf-plugin-versionlock || true
 
     if dnf versionlock --help >/dev/null 2>&1; then
-        dnf versionlock add bind bind-utils bind-libs bind-dnssec-utils bind-license || true
-    else
-        warn "versionlock 插件不可用，已跳过版本锁定。"
+        dnf versionlock add bind bind-utils bind-libs bind-license bind-dnssec-utils || true
     fi
 fi
 
-log "查看 named 服务状态"
-systemctl --no-pager --full status named || true
+log "服务状态"
 
-log "本机解析测试"
+systemctl status named -l --no-pager || true
+
+log "53 端口监听"
+
+ss -lntup | grep ':53' || true
+
+log "DNS 查询测试"
+
 dig @127.0.0.1 localhost A +short || true
 dig @127.0.0.1 . NS +short || true
+dig @127.0.0.1 www.baidu.com A +short || true
 
 echo
 log "BIND ${BIND_VERSION} 安装完成"
+echo "系统版本：${PRETTY_NAME:-unknown}"
 echo "named 版本：$(named -v)"
 echo "配置文件：/etc/named.conf"
-echo "数据目录：/var/named"
+echo "控制密钥：/etc/rndc.key"
+echo "服务文件：/etc/systemd/system/named.service"
+echo "区域目录：/var/named"
 echo "日志目录：/var/log/named"
-echo "服务管理：systemctl status|restart|stop named"
-echo "配置检查：named-checkconf -z /etc/named.conf"
+echo "备份目录：${BACKUP_DIR}"
+echo
+echo "常用命令："
+echo "  systemctl status named -l --no-pager"
+echo "  systemctl restart named"
+echo "  named-checkconf -z /etc/named.conf"
+echo "  rndc status"
+echo "  dig @127.0.0.1 www.baidu.com"
