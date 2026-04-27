@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+
+{% block title %}全局配置{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-sliders2"></i> 全局配置 (options{})</h4>
+    <div>
+        <a href="{% url 'dns:global_option_preview' %}" class="btn btn-outline-info btn-sm"><i class="bi bi-eye"></i> 预览配置</a>
+        <a href="{% url 'dns:publish_list' %}" class="btn btn-outline-success btn-sm"><i class="bi bi-cloud-upload"></i> 发布中心</a>
+    </div>
+</div>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    
+    {% if option.is_draft %}
+    <div class="alert alert-warning py-2 px-3 small">
+        <i class="bi bi-exclamation-circle me-1"></i>
+        当前为<strong>草稿</strong>状态，修改不会立即生效。请前往<a href="{% url 'dns:publish_list' %}">发布中心</a>进行发布。
+    </div>
+    {% endif %}
+
+    <div class="row g-3">
+        <!-- 基础选项 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-folder me-1"></i>基础选项</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">工作目录 (directory)</label>
+                            {{ form.directory }}
+                            {{ form.directory.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">PID文件</label>
+                            {{ form.pid_file }}
+                            {{ form.pid_file.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">缓存转储文件</label>
+                            {{ form.dump_file }}
+                            {{ form.dump_file.errors }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 监听地址 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-broadcast-pin me-1"></i>监听地址</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">IPv4 监听地址 (listen-on)</label>
+                            {{ form.listen_on_v4 }}
+                            <div class="form-text small">每行一个IP或 any。示例：<br>any<br>127.0.0.1<br>192.168.1.0/24</div>
+                            {{ form.listen_on_v4.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">IPv6 监听方式</label>
+                            {{ form.listen_on_v6 }}
+                            {{ form.listen_on_v6.errors }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 查询控制 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-shield-check me-1"></i>查询控制</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">允许查询来源 (allow-query)</label>
+                            {{ form.allow_query }}
+                            {{ form.allow_query.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">允许递归来源 (allow-recursion)</label>
+                            {{ form.allow_recursion }}
+                            {{ form.allow_recursion.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">启用递归 (recursion)</label>
+                            <div class="pt-2">{{ form.recursion }} <span class="ms-2 text-muted small">开启后将允许递归查询</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 安全与日志 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-shield-lock me-1"></i>安全与日志</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">DNSSEC验证</label>
+                            {{ form.dnssec_validation }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">权威NXDOMAIN</label>
+                            <div class="pt-2">{{ form.auth_nxdomain }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">空区域启用</label>
+                            <div class="pt-2">{{ form.empty_zones_enable }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">查询日志</label>
+                            <div class="pt-2">{{ form.querylog_enable }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 转发设置 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-arrow-right-circle me-1"></i>转发设置</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">转发策略 (forward)</label>
+                            {{ form.forward_policy }}
+                            <div class="form-text small">only=仅转发; first=优先转发</div>
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label fw-bold">上游转发DNS (forwarders)</label>
+                            {{ form.forwarders }}
+                            <div class="form-text small">每行一个IP，如：8.8.8.8、114.114.114.114、223.5.5.5</div>
+                            {{ form.forwarders.errors }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 性能与其他 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-speedometer me-1"></i>性能与其他</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">最大缓存大小</label>
+                            {{ form.max_cache_size }}
+                            <div class="form-text small">如 512M、1G、unlimited</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">隐藏版本信息</label>
+                            <div class="pt-2">{{ form.version_hide }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 高级配置 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-code-square me-1"></i>高级原始配置片段</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">无法用上方字段表达的named.conf options内容可直接在此填写，将追加在生成配置的options{}块末尾。</p>
+                    {{ form.raw_config }}
+                    {{ form.raw_config.errors }}
+                </div>
+            </div>
+        </div>
+
+        <!-- 提交 -->
+        <div class="col-12 mt-3 pt-3 border-top">
+            <button type="submit" class="btn btn-primary" onclick="this.form.submit_action.value='draft'">
+                <i class="bi bi-save"></i> 保存草稿
+            </button>
+            <button type="submit" class="btn btn-success" onclick="this.form.submit_action.value='apply'" style="margin-left:8px;">
+                <i class="bi bi-check-circle"></i> 保存并应用
+                <span class="badge bg-light text-dark ms-1">写入named.conf + 重载BIND9</span>
+            </button>
+            <span class="text-muted small ms-3">
+                保存草稿仅存数据库；<b>保存并应用</b>会立即写入配置文件并重载DNS服务
+            </span>
+            <!-- 隐藏字段标识提交动作 -->
+            <input type="hidden" name="submit_action" value="draft">
+        </div>
+    </div>
+</form>
+{% endblock %}

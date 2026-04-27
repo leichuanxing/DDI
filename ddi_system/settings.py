@@ -32,10 +32,9 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',    # 账户管理（用户/角色/登录日志）
     'dashboard.apps.DashboardConfig',  # 仪表盘首页
     'ipam.apps.IpamConfig',            # IP地址管理（区域/VLAN/子网/IP/网络探测）
-    'dnsmgr.apps.DnsmgrConfig',        # DNS管理（区域/记录/服务/探测）
-    'dhcpmgr.apps.DhcpmgrConfig',      # DHCP管理（地址池/租约/排除地址）
     'devices.apps.DevicesConfig',      # 设备管理（主机/接口/IP关联）
     'logs.apps.LogsConfig',            # 审计日志
+    'dns.apps.DnsConfig',              # DNS管理（BIND9配置/Zone/记录/ACL/View/发布/审计）
 ]
 
 # ========== 中间件 ==========
@@ -130,9 +129,6 @@ IP_STATUS_CHOICES = (
     ('conflict', '冲突'),
     ('disabled', '禁用'),
 )
-
-# ========== DNS记录类型选项（全局共用） ==========
-DNS_RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'PTR', 'MX', 'TXT', 'NS']
 
 # ========== 设备类型选项（全局共用） ==========
 DEVICE_TYPES = [

@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block title %}DNS审计日志{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-clipboard-data"></i> DNS 审计日志</h4>
+</div>
+
+<!-- 筛选栏 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <select name="category" class="form-select form-select-sm">
+                    <option value="">全部类别</option>
+                    {% for c_val, c_label in categories %}
+                    <option value="{{ c_val }}"{% if current_category == c_val %} selected{% endif %}>{{ c_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="action" class="form-select form-select-sm" style="width:180px;">
+                    <option value="">全部操作</option>
+                    {% for a_val, a_label in actions %}
+                    <option value="{{ a_val }}"{% if current_action == a_val %} selected{% endif %}>{{ a_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto flex-grow-1">
+                <input type="text" name="search" class="form-control form-control-sm" placeholder="搜索对象名称或详情..." value="{{ search }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
+                <a href="{% url 'dns:audit' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 统计摘要 -->
+<div class="row g-2 mb-3">
+    <div class="col-auto"><span class="badge bg-primary fs-6">共 {{ total_count }} 条记录</span></div>
+    <div class="col-auto"><span class="badge bg-success">成功: {{ success_count }}</span></div>
+    <div class="col-auto"><span class="badge bg-danger">失败: {{ failed_count }}</span></div>
+    <div class="col-auto text-muted small">当前第 {{ logs.number }}/{{ logs.paginator.num_pages }} 页 (每页50条)</div>
+</div>
+
+<!-- 日志列表 -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th width="40">#</th>
+                        <th width="100">操作人</th>
+                        <th width="90">操作类型</th>
+                        <th width="80">类别</th>
+                        <th>操作对象</th>
+                        <th style="width:250px">变更后内容(预览)</th>
+                        <th width="60">结果</th>
+                        <th width="130">时间</th>
+                        <th width="40">IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="text-secondary">{{ forloop.counter }}</td>
+                        <td>{{ log.user|default:'--'|truncatechars:10 }}</td>
+                        <td><code class="small">{{ log.action }}</code></td>
+                        <td>
+                            <span class="badge
+                                {% if log.category == 'zone' %}bg-primary
+                                {% elif log.category == 'record' %}bg-success
+                                {% elif log.category == 'acl' or log.category == 'view' %}bg-info
+                                {% elif log.category == 'service' %}bg-warning text-dark
+                                {% elif log.category == 'publish' %}bg-success
+                                {% elif log.category == 'backup' %}bg-secondary
+                                {% else %}bg-light text-dark
+                                {% endif %}">{{ log.get_category_display }}</span>
+                        </td>
+                        <td>
+                            <strong class="text-break" style="max-width:150px;">{{ log.object_name|truncatechars:30|default:'--' }}</strong>
+                            {% if log.detail %}<br><span class="text-muted small">{{ log.detail|truncatechars:30 }}</span>{% endif %}
+                        </td>
+                        <td class="text-truncate font-mono small" style="max-width:220px;" title="{{ log.new_value }}">
+                            {{ log.new_value|truncatechars:80|default:'--' }}
+                        </td>
+                        <td>
+                            {% if log.result == 'success' %}<i class="bi bi-check-circle-fill text-success"></i>
+                            {% elif log.result == 'failed' %}<i class="bi bi-x-circle-fill text-danger"></i>
+                            {% else %}<i class="bi bi-hourglass-split text-warning"></i>
+                            {% endif %}
+                        </td>
+                        <td style="white-space:nowrap;font-size:12px;">{{ log.operation_time|date:'m-d H:i:s' }}</td>
+                        <td class="font-mono small text-muted">{{ log.client_ip|default:'--' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="text-center py-4 text-muted">暂无审计日志记录</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 分页 -->
+{% if logs.has_other_pages %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center mb-0">
+        {% if logs.has_previous %}
+        <li class="page-item"><a class="page-link" href="?category={{ current_category }}&action={{ current_action }}&search={{ search }}&page={{ logs.previous_page_number }}">&laquo;</a></li>
+        {% endif %}
+        {% for p in logs.paginator.page_range %}
+        <li class="page-item {% if p == logs.number %}active{% endif %}"><a class="page-link" href="?category={{ current_category }}&action={{ current_action }}&search={{ search }}&page={{ p }}">{{ p }}</a></li>
+        {% endfor %}
+        {% if logs.has_next %}
+        <li class="page-item"><a class="page-link" href="?category={{ current_category }}&action={{ current_action }}&search={{ search }}&page={{ logs.next_page_number }}">&raquo;</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<div class="alert alert-info small mt-3">
+    <strong>说明：</strong>DNS审计日志记录了DNS模块下的所有关键操作，包括：
+    新建/编辑/删除区域和记录、服务控制(start/stop/restart/reload)、
+    发布和回滚、配置同步等。每条记录包含操作人、客户端IP、变更前后内容等详细信息。
+</div>
+{% endblock %}

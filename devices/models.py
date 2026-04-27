@@ -48,14 +48,6 @@ class Device(models.Model):
     
     def __str__(self):
         return f"{self.hostname} ({self.get_device_type_display()})"
-    
-    @property
-    def linked_dns_records(self):
-        """查询该设备关联IP地址对应的所有DNS记录（跨模块联动）"""
-        if not self.ip_address:
-            return []
-        from dnsmgr.models import DNSRecord
-        return DNSRecord.objects.filter(linked_ip=self.ip_address.ip_address)
 
 
 class DeviceInterface(models.Model):

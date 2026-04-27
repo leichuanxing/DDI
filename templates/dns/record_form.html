@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}资源记录{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-database"></i> {% if form.instance.pk %}编辑{% else %}新增{% endif %}资源记录</h4>
+    <a href="{{ request.META.HTTP_REFERER|default:request.META.HTTP_REFERER }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回</a>
+</div>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header py-2">记录信息</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">所属区域 <span class="text-danger">*</span></label>
+                            {% if has_zone_selected %}
+                                <div class="form-control-plaintext text-primary fw-bold">{{ zone_name }}</div>
+                                {{ form.zone }}
+                            {% else %}
+                                {% if all_zones %}
+                                    {{ form.zone }}
+                                {% else %}
+                                    <select class="form-select" disabled><option value="">-- 暂无可用区域 --</option></select>
+                                    <a href="{% url 'dns:zone_create' %}" class="form-text small text-info"><i class="bi bi-plus-circle"></i> 先去创建区域</a>
+                                {% endif %}
+                            {% endif %}
+                            {{ form.zone.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">记录类型 <span class="text-danger">*</span></label>
+                            {{ form.record_type }}
+                            <div id="type-help" class="form-text small text-info">-- 请选择记录类型 --</div>
+                            {{ form.record_type.errors }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">记录名称</label>
+                            {{ form.name }}
+                            <div class="form-text small">@ 表示区域本身，如 www、mail 等（相对名称）</div>
+                            {{ form.name.errors }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">TTL (秒)</label>
+                            {{ form.ttl }}
+                            <div class="form-text small">留空使用区域默认TTL</div>
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label fw-bold">记录值 <span class="text-danger">*</span></label>
+                            {{ form.value }}
+                            <div class="form-text small" id="value-placeholder">根据类型填写：A=IPv4 / CNAME=FQDN / MX="优先级 目标"</div>
+                            {{ form.value.errors }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">优先级 (MX/SRV)</label>
+                            {{ form.priority }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">权重 (SRV)</label>
+                            {{ form.weight }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">端口 (SRV)</label>
+                            {{ form.port }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label pt-2 mt-2">启用</label>
+                            <div>{{ form.enabled }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3 pt-3 border-top">
+                        <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-save"></i> 保存记录</button>
+                        <a href="{{ request.META.HTTP_REFERER }}" class="btn btn-secondary btn-lg ms-2">取消</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧: 规则提示 + 当前Zone信息 -->
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header py-2"><i class="bi bi-exclamation-triangle me-1"></i>业务规则</div>
+                <div class="card-body small">
+                    <ul class="mb-0 ps-3">
+                        <li><strong>SOA</strong>: 每个区域只能有一条，自动替换已有</li>
+                        <li><strong>NS</strong>: 至少保留一条，最后一条禁止删除</li>
+                        <li><strong>CNAME</strong>: 不能与同名的其他类型记录共存</li>
+                        <li><strong>A</strong>: 必须是合法的 IPv4 地址</li>
+                        <li><strong>AAAA</strong>: 必须是合法的 IPv6 地址</li>
+                        <li><strong>PTR</strong>: 用于反向解析，值为FQDN</li>
+                        <li><strong>MX</strong>: 格式 "优先级 目标域名"</li>
+                        <li><strong>TXT</strong>: 文本内容用引号包裹</li>
+                        <li>保存后自动递增该区域的 Serial 号</li>
+                    </ul>
+                </div>
+            </div>
+
+            {% if has_zone_selected %}
+            <div class="card">
+                <div class="card-header py-2">当前区域: {{ zone_name }}</div>
+                <div class="body small font-monospace">
+                    Zone: {{ zone_name }}<br>
+                    Type: {{ zone_type }}<br>
+                    TTL: {{ zone_ttl }}<br>
+                    Serial: {{ zone_serial }}
+                </div>
+            </div>
+            {% elif not all_zones %}
+            <div class="card border-warning">
+                <div class="card-header py-2 bg-warning bg-opacity-10"><i class="bi bi-exclamation-circle me-1"></i>提示</div>
+                <div class="card-body small">
+                    当前没有可用的区域。<br><br>
+                    <a href="{% url 'dns:zone_create' %}" class="btn btn-sm btn-outline-primary w-100"><i class="bi bi-plus-lg"></i> 创建新区域</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</form>
+
+<script>
+const helpText = {
+    SOA: '主NS 管理邮箱(用.替代@)，通常由系统自动生成',
+    NS: '名称服务器FQDN，如 ns1.example.com.',
+    A: 'IPv4地址，如 192.168.1.10',
+    AAAA: 'IPv6地址，如 2001:db8::1',
+    CNAME: '目标域名(FQDN)，不能与同名其他记录并存',
+    MX: '格式: 优先级 目标域名，如 10 mail.example.com.',
+    PTR: '反向指针的目标域名(FQDN)',
+    TXT: '文本内容',
+    SRV: '格式: 权重 端口 目标域名'
+};
+
+document.getElementById('record_type_select')?.addEventListener('change', function() {
+    const t = this.value;
+    const helpEl = document.getElementById('type-help');
+    const valPh = document.getElementById('value-placeholder');
+    if (t && helpText[t]) {
+        helpEl.textContent = helpText[t];
+        helpEl.classList.remove('text-muted');
+        helpEl.classList.add('text-info');
+    }
+});
+</script>
+{% endblock %}

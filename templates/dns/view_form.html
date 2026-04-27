@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}View{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-layers"></i> {% if form.instance.pk %}编辑 View: {{ form.instance.name }}{% else %}新增View{% endif %}</h4>
+    <div>
+        {% if form.instance.pk %}
+        <a href="{% url 'dns:view_preview' form.instance.pk %}" class="btn btn-outline-info btn-sm"><i class="bi bi-eye"></i> 预览配置</a>
+        {% endif %}
+        <a href="{% url 'dns:view_list' %}" class="btn btn-outline-secondary btn-sm ms-2"><i class="bi bi-arrow-left"></i> 返回列表</a>
+    </div>
+</div>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    <div class="row g-3">
+        <!-- 基本信息 -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header py-2">基本信息</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">View名称 <span class="text-danger">*</span></label>
+                        {{ form.name }}
+                        {{ form.name.errors }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        {{ form.description }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">排序权重</label>
+                        {{ form.order_index }}
+                        <div class="form-text small">数值越小越优先匹配</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 匹配条件 -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header py-2">匹配条件</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">匹配客户端 (match-clients)</label>
+                        {{ form.match_clients }}
+                        <div class="form-text small">按住Ctrl多选。选择后仅这些来源的查询会进入本View</div>
+                        {{ form.match_clients.errors }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">匹配目标 (match-destinations)</label>
+                        {{ form.match_destinations }}
+                        {{ form.match_destinations.errors }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 权限设置 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2">权限设置</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">递归设置</label>
+                            {{ form.recursion }}
+                            <div class="form-text small">留空则继承全局配置</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">查询权限ACL</label>
+                            {{ form.allow_query_acl }}
+                            <div class="form-text small">留空则使用全局allow-query</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">递归权限ACL</label>
+                            {{ form.allow_recursion_acl }}
+                            <div class="form-text small">留空则使用全局allow-recursion</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 提交 -->
+        <div class="col-12 mt-3 pt-3 border-top">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> 保存View</button>
+            <a href="{% url 'dns:view_list' %}" class="btn btn-secondary ms-2">取消</a>
+        </div>
+    </div>
+</form>
+
+{% if config_text %}
+<div class="card mt-3">
+    <div class="card-header py-2"><i class="bi bi-code me-1"></i>View配置预览</div>
+    <div class="card-body font-monospace small bg-dark text-success p-3 rounded">
+        <pre>{{ config_text }}</pre>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

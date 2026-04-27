@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+
+{% block title %}DNS仪表盘{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-speedometer2"></i> DNS仪表盘</h4>
+    <div>
+        <a href="{% url 'dns:service' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-router"></i> 服务管理</a>
+        <a href="{% url 'dns:publish_list' %}" class="btn btn-outline-success btn-sm"><i class="bi bi-cloud-upload"></i> 发布中心</a>
+    </div>
+</div>
+
+<!-- 服务状态卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="card stat-card h-100 border-start border-4 border-primary">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 bg-primary bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-globe2 text-primary fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">区域总数</div>
+                        <div class="stat-value text-primary">{{ stats.zone_total }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stat-card h-100 border-start border-4 border-success">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-hdd-stack text-success fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">主区域(Master)</div>
+                        <div class="stat-value text-success">{{ stats.zone_master }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stat-card h-100 border-start border-4 border-info">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-database text-info fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">资源记录数</div>
+                        <div class="stat-value text-info">{{ stats.record_total }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stat-card h-100 border-start border-4 border-warning">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 bg-warning bg-opacity-10 rounded-circle p-3 me-3">
+                        <i class="bi bi-layers text-warning fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">View / ACL</div>
+                        <div class="stat-value text-warning">{{ stats.view_count }} / {{ stats.acl_count }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-2 col-md-4 col-6">
+        <div class="card text-center py-3">
+            <div class="fw-bold text-primary fs-5">{{ stats.zone_slave }}</div>
+            <small class="text-muted">从区域(Slave)</small>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6">
+        <div class="card text-center py-3">
+            <div class="fw-bold text-success fs-5">{{ stats.zone_forward }}</div>
+            <small class="text-muted">转发区(Forward)</small>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6">
+        <div class="card text-center py-3">
+            <div class="fw-bold text-info fs-5">{{ stats.zone_enabled }}/{{ stats.zone_total }}</div>
+            <small class="text-muted">启用/总数</small>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6">
+        <div class="card text-center py-3">
+            <div class="fw-bold text-secondary fs-5">{{ stats.forward_rule_count }}</div>
+            <small class="text-muted">转发规则</small>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-6">
+        <div class="card text-center py-3">
+            <div class="fw-bold fw-bolder">{{ stats.server_hostname }}</div>
+            <small class="text-muted">服务器主机名</small>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- 最近发布 -->
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <span><i class="bi bi-cloud-upload me-1"></i>最近发布记录</span>
+                <a href="{% url 'dns:publish_history' %}" class="btn btn-sm btn-outline-secondary">查看全部</a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_publishes %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light"><tr><th>版本号</th><th>状态</th><th>变更数</th><th>发布人</th><th>时间</th></tr></thead>
+                    <tbody>
+                        {% for v in recent_publishes %}
+                        <tr>
+                            <td><code>v{{ v.version_number }}</code></td>
+                            <td>{% if v.status == 'success' %}<span class="badge bg-success">成功</span>{% elif v.status == 'failed' %}<span class="badge bg-danger">失败</span>{% elif v.status == 'rolled_back' %}<span class="badge bg-secondary">已回滚</span>{% else %}<span class="badge bg-warning text-dark">{{ v.get_status_display }}</span>{% endif %}</td>
+                            <td>{{ v.object_count }}</td>
+                            <td>{{ v.publisher|default:'-' }}</td>
+                            <td>{{ v.publish_time|date:'m-d H:i'|default:'-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-4 text-center text-muted">暂无发布记录</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近操作 + 异常 -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header py-2">
+                <span><i class="bi bi-clock-history me-1"></i>最近操作审计</span>
+            </div>
+            <div class="card-body p-0" style="max-height:320px;overflow-y:auto;">
+                {% if recent_audits %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top"><tr><th>操作</th><th>对象</th><th>结果</th><th>时间</th></tr></thead>
+                    <tbody>
+                        {% for log in recent_audits %}
+                        <tr>
+                            <td>{{ log.get_category_display }}</td>
+                            <td class="text-truncate" style="max-width:120px;">{{ log.object_name|truncatechars:20 }}</td>
+                            <td>{% if log.result == 'success' %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
+                            <td class="text-muted" style="white-space:nowrap;font-size:12px;">{{ log.operation_time|date:'m-d H:i:s' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-3 text-muted">暂无操作记录</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-4 text-center text-muted">暂无审计记录</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 异常摘要 -->
+        {% if alerts %}
+        <div class="card mt-3">
+            <div class="card-header py-2 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>异常摘要</div>
+            <div class="card-body p-2">
+                {% for alert in alerts %}
+                <div class="alert {% if alert.level == 'danger' %}alert-danger{% else %}alert-warning{% endif %} py-1 px-2 mb-1 small">{{ alert.message }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

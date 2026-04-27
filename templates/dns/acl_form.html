@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}ACL{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-shield-lock"></i> {% if acl %}{{ acl.name }} - 详情/编辑{% else %}新增ACL{% endif %}</h4>
+    <a href="{% url 'dns:acl_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回列表</a>
+</div>
+
+{% if acl %}
+<!-- ACL详情 + 条目编辑 -->
+<form method="post" novalidate>
+    {% csrf_token %}
+    
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header py-2">基本信息</div>
+                <div class="card-body">
+                    {% if can_delete == False and acl.built_in %}
+                    <div class="alert alert-warning py-2 small">此为内置ACL，不可修改名称和删除。</div>
+                    {% elif can_delete == False %}
+                    <div class="alert alert-warning py-2 small">该ACL正在被引用，请先解除关联后再删除。</div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">ACL名称 <span class="text-danger">*</span></label>
+                        {{ form.name }}
+                        {{ form.name.errors }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        {{ form.description }}
+                        {{ form.description.errors }}
+                    </div>
+                    <button type="submit" name="save_info" class="btn btn-primary btn-sm">保存基本信息</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <span>ACL条目 ({{ items|length }})</span>
+                    <button type="button" class="btn btn-sm btn-success" onclick="addItem()">+ 添加条目</button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light"><tr><th width="25%">类型</th><th>值</th><th>排序</th><th width="60px"></th></tr></thead>
+                        <tbody id="items-body">
+                            {% for item in items %}
+                            <tr>
+                                <td><select name="item_type_{{ item.id }}" class="form-select form-select-sm">
+                                    <option value="ip" {% if item.item_type == "ip" %}selected{% endif %}>IPv4地址</option>
+                                    <option value="ipv6" {% if item.item_type == "ipv6" %}selected{% endif %}>IPv6地址</option>
+                                    <option value="cidr" {% if item.item_type == "cidr" %}selected{% endif %}>CIDR网段</option>
+                                    <option value="key" {% if item.item_type == "key" %}selected{% endif %}>TSIG密钥</option>
+                                    <option value="acl_ref" {% if item.item_type == "acl_ref" %}selected{% endif %}>引用ACL</option>
+                                    <option value="any" {% if item.item_type == "any" %}selected{% endif %}>any (任意)</option>
+                                    <option value="none" {% if item.item_type == "none" %}selected{% endif %}>none (拒绝)</option>
+                                    <option value="localhost" {% if item.item_type == "localhost" %}selected{% endif %}>localhost (本机)</option>
+                                    <option value="localnets" {% if item.item_type == "localnets" %}selected{% endif %}>localnets (本地网络)</option>
+                                </select></td>
+                                <td><input type="text" name="item_value_{{ item.id }}" value="{{ item.value }}" class="form-control form-control-sm" placeholder="{{ item.item_type|default:'' }}"></td>
+                                <td><input type="number" name="item_order_{{ item.id }}" value="{{ item.order_index }}" class="form-control form-control-sm" style="width:70px;"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">&times;</button></td>
+                            </tr>
+                            {% empty %}
+                            <tr id="empty-row"><td colspan="4" class="text-center py-3 text-muted small">暂无条目，点击"+添加条目"</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" name="save_items" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> 保存条目</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- 引用关系 -->
+<div class="row g-3 mt-2">
+    {% if used_in_views_clients or used_in_views_dests or used_in_zones_transfer or used_in_zones_update %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-link-45deg me-1"></i>引用关系</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% if used_in_views_clients %}
+                    <div class="col-md-3"><strong>match-clients 引用:</strong><br>
+                        {% for v in used_in_views_clients %}<span class="badge bg-info me-1">{{ v.name }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if used_in_views_dests %}
+                    <div class="col-md-3"><strong>match-destinations 引用:</strong><br>
+                        {% for v in used_in_views_dests %}<span class="badge bg-info me-1">{{ v.name }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if used_in_zones_transfer %}
+                    <div class="col-md-3"><strong>allow-transfer 引用:</strong><br>
+                        {% for z in used_in_zones_transfer %}<span class="badge bg-warning me-1">{{ z.name }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if used_in_zones_update %}
+                    <div class="col-md-3"><strong>allow-update 引用:</strong><br>
+                        {% for z in used_in_zones_update %}<span class="badge bg-warning me-1">{{ z.name }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 预览 -->
+<div class="card mt-3">
+    <div class="card-header py-2"><i class="bi bi-code me-1"></i>生成的named.conf片段预览</div>
+    <div class="card-body font-monospace small bg-dark text-success p-3 rounded">
+        acl "{{ acl.name }}" {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;{% for item in items %}{{ item.render }};{% if not forloop.last %}<br>{% endif %}{% empty %}// 无条目{% endfor %}<br>
+        };
+    </div>
+</div>
+
+{% else %}
+<!-- 新增ACL表单 -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">ACL名称 <span class="text-danger">*</span></label>
+                    {{ form.name }}
+                    {{ form.name.errors }}
+                    <small class="text-muted d-block mt-1">不能使用保留名: any / none / localhost / localnets</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">描述</label>
+                    {{ form.description }}
+                    {{ form.description.errors }}
+                </div>
+                <div class="col-12 mt-3 pt-3 border-top">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> 创建ACL</button>
+                    <a href="{% url 'dns:acl_list' %}" class="btn btn-secondary ms-2">取消</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+let itemCounter = {{ items|length|default:0 }};
+function addItem() {
+    const tbody = document.getElementById('items-body');
+    const emptyRow = document.getElementById('empty-row');
+    if (emptyRow) emptyRow.remove();
+    itemCounter++;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><select name="new_item_type_${itemCounter}" class="form-select form-select-sm">
+        <option value="ip">IPv4地址</option><option value="ipv6">IPv6地址</option>
+        <option value="cidr">CIDR网段</option><option value="key">TSIG密钥</option>
+        <option value="acl_ref">引用ACL</option><option value="any">any</option>
+        <option value="none">none</option><option value="localhost">localhost</option>
+        <option value="localnets">localnets</option>
+    </select></td><td><input type="text" name="new_item_value_${itemCounter}" class="form-control form-control-sm" placeholder="值"></td>
+    <td><input type="number" name="new_item_order_${itemCounter}" value="${itemCounter}" class="form-control form-control-sm" style="width:70px;"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">&times;</button></td>`;
+    tbody.appendChild(tr);
+}
+</script>
+{% endblock %}

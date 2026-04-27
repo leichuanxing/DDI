@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}主从同步{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-arrow-left-right"></i> 主从同步状态</h4>
+    <div class="d-flex gap-2">
+        {% if master_count or slave_count %}
+        <span class="badge bg-primary">Master: {{ master_count|default:0 }}</span>
+        <span class="badge bg-warning text-dark">Slave: {{ slave_count|default:0 }}</span>
+        <span class="badge bg-success">已同步: {{ in_sync_count|default:0 }}</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        {% if sync_statuses %}
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>区域名称</th><th>类型</th><th>本地Serial</th>
+                    <th>远端Serial</th><th>同步状态</th>
+                    <th>上次同步时间</th><th>上次结果</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ss in sync_statuses %}
+                <tr>
+                    <td><strong>{{ ss.zone.name }}</strong></td>
+                    <td>
+                        {% if ss.zone.zone_type == 'master' %}<span class="badge bg-primary">Master</span>
+                        {% else %}<span class="badge bg-warning text-dark">Slave</span>{% endif %}
+                    </td>
+                    <td><code class="fw-bold">{{ ss.local_serial }}</code></td>
+                    <td>
+                        {% if ss.remote_serial is None %}<span class="text-muted">--</span>
+                        {% elif ss.in_sync %}<code class="text-success">{{ ss.remote_serial }}</code>
+                        {% else %}<code class="text-danger">{{ ss.remote_serial }} &#x26A0;</code>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if ss.in_sync == True %}<span class="badge bg-success">已同步</span>
+                        {% elif ss.in_sync == False %}<span class="badge bg-danger">不同步</span>
+                        {% else %}<span class="badge bg-secondary">未知</span>
+                        {% endif %}
+                    </td>
+                    <td style="white-space:nowrap;font-size:12px;">{{ ss.last_sync_time|date:'m-d H:i:s'|default:'--' }}</td>
+                    <td class="text-truncate" style="max-width:120px;" title="{{ ss.last_sync_message }}">
+                        {{ ss.last_sync_result|default:'--'|truncatechars:15 }}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="triggerSync({{ ss.zone.pk }})">触发同步</button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-center py-4 text-muted">暂无主从同步数据（需要存在 Master 或 Slave 类型区域）</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-4 text-center text-muted">暂无主从同步数据</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 同步日志 -->
+<div class="card mt-3">
+    <div class="card-header py-2"><i class="bi bi-clock-history me-1"></i>最近同步操作</div>
+    <div class="card-body p-0" style="max-height:250px;overflow-y:auto;">
+        {% if sync_logs %}
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top"><tr><th>时间</th><th>操作</th><th>对象</th><th>结果</th></tr></thead>
+            <tbody class="font-monospace small">
+                {% for log in sync_logs %}
+                <tr>
+                    <td style="white-space:nowrap;">{{ log.operation_time|date:'m-d H:i:s' }}</td>
+                    <td>{{ log.action }}</td>
+                    <td title="{{ log.detail|default:'' }}" class="text-truncate" style="max-width:200px;">{{ log.object_name|truncatechars:30 }}</td>
+                    <td>{% if log.result == 'success' %}<span class="text-success">OK</span>{% else %}<span class="text-danger">FAIL</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="p-3 text-center text-muted small font-monospace">// 暂无同步操作日志...</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="alert alert-info small mt-3">
+    <strong>说明：</strong>
+    主从同步功能跟踪 Master/Slave 区域的 SOA Serial 一致性。
+    点击"触发同步"会向从服务器发送通知或检查命令。
+    实际的 AXFR/IXFR 数据传输由 BIND9 自动完成。
+</div>
+
+<script>
+function triggerSync(zoneId) {
+    if (!confirm('确定要触发此区域的同步检查吗？')) return;
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '触发中...';
+
+    fetch('{% url "dns:trigger_sync" %}', {
+        method: 'POST', headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        body: 'zone_id=' + zoneId, credentials: 'same-origin'
+    }).then(r => r.json()).then(d => {
+        btn.disabled = false;
+        btn.textContent = '触发同步';
+        if (d.success) {
+            alert(`同步检查已触发！\n区域: ${d.zone_name || ''}\n本地Serial: ${d.local_serial || '--'}\n${d.message || ''}`);
+            location.reload();
+        } else {
+            alert('失败: ' + (d.error || '未知错误'));
+        }
+    }).catch(e => {
+        btn.disabled = false;
+        btn.textContent = '触发同步';
+        alert('请求异常: ' + e.message);
+    });
+}
+</script>
+{% endblock %}

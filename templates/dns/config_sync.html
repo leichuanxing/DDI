@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+
+{% block title %}配置同步{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-arrow-repeat"></i> 配置同步</h4>
+    <button class="btn btn-primary btn-sm" onclick="doSync()"><i class="bi bi-download"></i> 从磁盘同步到数据库</button>
+</div>
+
+{% if disk_data.error %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-1"></i>{{ disk_data.error }}
+    <p class="small mb-0 mt-1">请确认BIND9已安装且配置文件路径正确（当前: {{ server.named_conf_path }}）</p>
+</div>
+{% endif %}
+
+<!-- 统计对比卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-primary"><div class="card-body text-center py-2">
+            <div class="fs-5 fw-bold text-primary">{{ sync_stats.disk_zone_count }}</div><small class="text-muted">磁盘Zone数</small></div></div></div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-success"><div class="card-body text-center py-2">
+            <div class="fs-5 fw-bold text-success">{{ sync_stats.db_zone_count }}</div><small class="text-muted">数据库Zone数</small></div></div></div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-info"><div class="card-body text-center py-2">
+            <div class="fs-5 fw-bold text-info">{{ sync_stats.disk_acl_count }} / {{ sync_stats.db_acl_count }}</div><small class="text-muted">磁盘/数据库ACL</small></div></div></div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card {% if sync_stats.diff_count > 0 %}border-danger{% else %}border-secondary{% endif %}">
+            <div class="card-body text-center py-2">
+            <div class="fs-5 fw-bold {% if sync_stats.diff_count > 0 %}text-danger{% else %}text-secondary{% endif %}">{{ sync_stats.diff_count }}</div>
+            <small class="text-muted">差异项数</small></div></div></div>
+</div>
+
+<div class="row g-4">
+    <!-- 左侧: 磁盘文件树 -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-folder-symlink me-1"></i>磁盘上的BIND9配置对象 ({{ server.named_conf_path }})</div>
+            <div class="card-body p-0" style="min-height:300px;">
+                {% if disk_data.zones or disk_data.acls or disk_data.views %}
+                <ul class="list-group list-group-flush small">
+                    {% for z in disk_data.zones %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-1 px-3">
+                        <span><i class="bi bi-diagram-3-square me-1 text-primary"></i>{{ z.name }}</span>
+                        <span><span class="badge bg-light text-dark">{{ z.type|default:'unknown' }}</span></span>
+                    </li>
+                    {% endfor %}
+                    {% for a in disk_data.acls %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-1 px-3">
+                        <span><i class="bi bi-shield-lock me-1 text-success"></i>acl "{{ a.name }}"</span>
+                        <span class="text-muted">{{ a.items|length }} items</span>
+                    </li>
+                    {% endfor %}
+                    {% for v in disk_data.views %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-1 px-3">
+                        <span><i class="bi bi-layers me-1 text-info"></i>view "{{ v.name }}"</span>
+                        <span class="text-muted">view</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                {% if disk_data.include_files %}
+                <div class="px-3 py-2 bg-light border-top">
+                    <small class="text-muted"><strong>Include文件 ({{ disk_data.include_files|length }}):</strong></small>
+                    {% for inc in disk_data.include_files %}<code class="d-block small ms-2 my-1">{{ inc }}</code>{% endfor %}
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-inbox fs-1 opacity-25 d-block mb-2"></i>
+                    <p class="small">未在磁盘配置中找到Zone/ACL/View定义<br>可能配置为空或格式不被支持</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧: 数据库中的配置对象 -->
+    <div class="col-lg-7">
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-database me-1"></i>数据库中的配置对象</div>
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-primary">{{ db_objects.zone_total }}</div>
+                        <small class="text-muted">Zone 区域</small>
+                        {% if db_objects.zones %}
+                        <div class="small mt-1" style="max-height:80px;overflow-y:auto;">
+                            {% for z in db_objects.zones %}<code class="d-block mt-1">{{ z }}</code>{% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-success">{{ db_objects.acl_total }}</div>
+                        <small class="text-muted">ACL 定义</small>
+                        {% if db_objects.acls %}
+                        <div class="small mt-1" style="max-height:80px;overflow-y:auto;">
+                            {% for a in db_objects.acls %}<code class="d-block mt-1">{{ a }}</code>{% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-info">{{ db_objects.view_total }}</div>
+                        <small class="text-muted">View 视图</small>
+                        {% if db_objects.views %}
+                        <div class="small mt-1" style="max-height:80px;overflow-y:auto;">
+                            {% for v in db_objects.views %}<code class="d-block mt-1">{{ v }}</code>{% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-3">
+                        <div class="fs-4 fw-bold text-secondary">
+                            {% if global_forwarders %}{{ global_forwarders|wordcount }}{% else %}0{% endif %}
+                        </div>
+                        <small class="text-muted">转发IP数</small>
+                        <div class="small mt-1 text-muted">options块</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 差异对比 -->
+        {% if diff_result %}
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-arrows-expand me-1"></i>差异分析结果</div>
+            <div class="card-body font-monospace small" style="max-height:300px;overflow:auto;">
+                {{ diff_result|linebreaksbr }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 同步说明 -->
+        <div class="alert alert-info small mt-3 mb-0">
+            <strong>同步说明：</strong>
+            <ul class="mb-0 ps-3">
+                <li>扫描磁盘上的 named.conf 及其 include 的所有文件</li>
+                <li>解析出 acl、view、zone、options 等配置对象</li>
+                <li>与数据库现有数据做对比，展示差异</li>
+                <li>确认后可将磁盘配置导入数据库（不覆盖正式发布）</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+function doSync() {
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 同步中...';
+
+    fetch('{% url "dns:api_sync_execute" %}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        credentials: 'same-origin'
+    }).then(r => r.json()).then(d => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-download"></i> 从磁盘同步到数据库';
+        if (d.success) {
+            alert(`${d.message}\n\n新建 ${d.created || 0} 条对象`);
+            location.reload();
+        } else {
+            alert('同步失败: ' + (d.error || '未知错误'));
+        }
+    }).catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-download"></i> 从磁盘同步到数据库';
+        alert('请求异常: ' + e.message);
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}

@@ -132,7 +132,6 @@ class IPAddress(models.Model):
     
     BINDING_TYPE_CHOICES = (
         ('static', '静态绑定'),
-        ('dhcp', 'DHCP分配'),
     )
     
     ip_address = models.GenericIPAddressField('IP地址', protocol='both')
@@ -145,9 +144,8 @@ class IPAddress(models.Model):
     owner = models.CharField('使用人', max_length=100, blank=True)
     department = models.CharField('部门', max_length=100, blank=True)
     device_type = models.CharField('设备类型', max_length=50, blank=True)
-    binding_type = models.CharField('绑定方式', max_length=20, choices=BINDING_TYPE_CHOICES, 
+    binding_type = models.CharField('绑定方式', max_length=20, choices=BINDING_TYPE_CHOICES,
                                     default='static')
-    dns_linked = models.BooleanField('DNS关联状态', default=False)  # 标记该IP是否已关联DNS记录
     notes = models.TextField('备注', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)

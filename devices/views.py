@@ -55,11 +55,9 @@ class DeviceDetailView(DetailView):
     context_object_name = 'device'
     
     def get_context_data(self, **kwargs):
-        """加载关联的DNS记录（跨模块联动查询）和网络接口列表"""
+        """加载网络接口列表"""
         context = super().get_context_data(**kwargs)
         device = self.object
-        # 跨模块联动：查询该设备关联IP对应的所有DNS记录
-        context['linked_dns'] = device.linked_dns_records
         # 查询该设备的所有网络接口（支持多网卡场景）
         context['interfaces'] = device.interfaces.all()
         

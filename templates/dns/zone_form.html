@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}区域{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-diagram-3-square"></i> 
+        {% if form.instance.pk %}编辑区域: {{ form.instance.name }}{% else %}新增区域{% endif %}
+    </h4>
+    {% if form.instance.pk %}
+    <div>
+        <a href="{% url 'dns:zone_detail' form.instance.pk %}" class="btn btn-outline-info btn-sm"><i class="bi bi-eye"></i> 查看详情</a>
+        <a href="{% url 'dns:record_list' %}?zone={{ form.instance.pk }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-database"></i> 记录管理</a>
+        <a href="{% url 'dns:zone_preview' form.instance.pk %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-code"></i> 预览文件</a>
+        <a href="{% url 'dns:zone_list' %}" class="btn btn-outline-secondary btn-sm ms-2"><i class="bi bi-arrow-left"></i> 返回</a>
+    </div>
+    {% else %}
+    <a href="{% url 'dns:zone_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回列表</a>
+    {% endif %}
+</div>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    <div class="row g-3">
+        <!-- 基本信息 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-info-circle me-1"></i>基本信息</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">区域名称 <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {{ form.name.errors }}
+                            <div class="form-text small">正向区填域名(如 example.com)，反向区填 in-addr.arpa 格式</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">区域类型 <span class="text-danger">*</span></label>
+                            {{ form.zone_type }}
+                            {{ form.zone_type.errors }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">方向</label>
+                            {{ form.direction_type }}
+                            {{ form.direction_type.errors }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">所属View</label>
+                            {{ form.view }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">文件名</label>
+                            {{ form.file_name }}
+                            <div class="form-text small">留空自动生成，如 zone.example_com</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">默认TTL(秒)</label>
+                            {{ form.default_ttl }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label pt-2 mt-2">启用</label>
+                            <div>{{ form.enabled }}</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">描述</label>
+                            {{ form.description }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SOA 参数 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-gear me-1"></i>SOA 参数</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">主DNS服务器 (Primary NS)</label>
+                            {{ form.primary_ns }}
+                            <div class="form-text small">如 ns1.example.com.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">管理员邮箱(RNAME)</label>
+                            {{ form.admin_mail }}
+                            <div class="form-text small">如 admin.example.com. (用.替代@)</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">序列号(Serial)</label>
+                            {{ form.serial_no }}
+                            <div class="form-text small font-monospace">{{ form.initial.serial_no.value|default:'2026042401' }}</div>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Refresh</label>
+                            {{ form.refresh }}
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Retry</label>
+                            {{ form.retry }}
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-2 offset-md-4">
+                            <label class="form-label">Expire</label>
+                            {{ form.expire }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Minimum</label>
+                            {{ form.minimum }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主从设置 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-arrows me-1"></i>主从设置 (Slave区必填)</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">主服务器IP (Slave区填写)</label>
+                            {{ form.master_ips }}
+                            <div class="form-text small">从区域必须指定，逗号分隔多IP</div>
+                            {{ form.master_ips.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">允许传输的目标IP (Master区填写)</label>
+                            {{ form.slave_ips }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 转发设置 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-arrow-right-circle me-1"></i>转发设置 (Forward/Stub区必填)</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">转发目标IP</label>
+                            {{ form.forwarders }}
+                            <div class="form-text small">转发区域必须指定，逗号或换行分隔</div>
+                            {{ form.forwarders.errors }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">转发策略</label>
+                            {{ form.forward_policy }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 权限控制 -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2"><i class="bi bi-shield-lock me-1"></i>权限控制</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">允许Zone传输 (allow-transfer)</label>
+                            {{ form.allow_transfer_acl }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">允许动态更新 (allow-update)</label>
+                            {{ form.allow_update_acl }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label pt-2 mt-2">动态更新</label>
+                            <div>{{ form.dynamic_update }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 提交 -->
+        <div class="col-12 mt-3 pt-3 border-top">
+            <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-save"></i> 保存区域</button>
+            {% if form.instance.pk %}
+            <a href="{% url 'dns:record_list' %}?zone={{ form.instance.pk }}" class="btn btn-success btn-lg ms-2"><i class="bi bi-database"></i> 管理资源记录</a>
+            {% endif %}
+            <a href="{% url 'dns:zone_list' %}" class="btn btn-secondary btn-lg ms-2">取消</a>
+        </div>
+    </div>
+</form>
+{% endblock %}

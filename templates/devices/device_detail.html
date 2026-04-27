@@ -53,29 +53,6 @@
     
     <!-- 关联信息 -->
     <div class="col-lg-5">
-        <!-- DNS记录 -->
-        <div class="card mb-3">
-            <div class="card-header py-2">关联DNS记录</div>
-            <div class="card-body p-0">
-                {% if linked_dns %}
-                <table class="table table-sm table-hover mb-0">
-                    <thead class="table-light"><tr><th>名称</th><th>类型</th><th>值</th></tr></thead>
-                    <tbody>
-                        {% for r in linked_dns %}
-                        <tr>
-                            <td>{{ r.name }}</td>
-                            <td><code>{{ r.record_type }}</code></td>
-                            <td class="text-truncate" style="max-width: 150px;">{{ r.value|truncatechars:25 }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="p-3 text-center text-muted small">无关联DNS记录</div>
-                {% endif %}
-            </div>
-        </div>
-        
         <!-- 网络接口 -->
         <div class="card">
             <div class="card-header py-2">网络接口</div>

@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block title %}资源记录管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-database"></i> 资源记录管理</h4>
+    <div class="d-flex gap-2">
+        <a href="{% url 'dns:batch_import' %}" class="btn btn-outline-success btn-sm"><i class="bi bi-upload"></i> 批量导入</a>
+        <a href="{% url 'dns:batch_export' %}" class="btn btn-outline-info btn-sm"><i class="bi bi-download"></i> 批量导出</a>
+        <a href="{% url 'dns:record_create' %}{% if request.GET.zone %}?zone={{ request.GET.zone }}{% endif %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增记录</a>
+    </div>
+</div>
+
+<!-- Zone选择 + 筛选 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <select name="zone" class="form-select form-select-sm" style="min-width:200px;">
+                    <option value="">-- 选择区域 --</option>
+                    {% for z in all_zones %}
+                    <option value="{{ z.pk }}" {% if request.GET.zone|default:'' == z.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ z.name }} ({{ z.get_zone_type_display }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">{{ search_form.search }}</div>
+            <div class="col-auto">{{ search_form.record_type }}</div>
+            <div class="col-auto">{{ search_form.enabled }}</div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
+                <a href="{% url 'dns:record_list' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 记录列表 -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle text-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th><th>区域</th><th>类型</th><th>名称</th><th>TTL</th><th>值/优先级</th><th>启用</th><th>创建时间</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>{{ r.id }}</td>
+                        <td>{{ r.zone.name|truncatechars:20 }}</td>
+                        <td>{% if r.record_type == 'SOA' %}<span class="badge bg-dark">SOA</span>
+                            {% elif r.record_type == 'NS' %}<span class="badge bg-primary">NS</span>
+                            {% elif r.record_type == 'A' %}<span class="badge bg-success">A</span>
+                            {% elif r.record_type == 'AAAA' %}<span class="badge bg-info">AAAA</span>
+                            {% elif r.record_type == 'CNAME' %}<span class="badge bg-warning text-dark">CNAME</span>
+                            {% elif r.record_type == 'MX' %}<span class="badge bg-danger">MX</span>
+                            {% elif r.record_type == 'PTR' %}<span class="badge bg-secondary">PTR</span>
+                            {% else %}<span class="badge bg-light text-dark">{{ r.record_type }}</span>
+                            {% endif %}</td>
+                        <td><strong>{{ r.name }}</strong></td>
+                        <td class="text-muted small">{{ r.ttl|default:'-' }}</td>
+                        <td class="text-truncate" style="max-width:200px;">
+                            {% if r.priority is not None %}<span class="text-muted">[{{ r.priority }}] </span>{% endif %}
+                            {{ r.value|truncatechars:40 }}
+                        </td>
+                        <td>{% if r.enabled %}<span class="text-success">&#x25CF;</span>{% else %}<span class="text-muted">&#x25CB;</span>{% endif %}</td>
+                        <td style="white-space:nowrap;font-size:12px;">{{ r.created_at|date:'m-d H:i' }}</td>
+                        <td>
+                            <a href="{% url 'dns:record_edit' r.pk %}" class="btn btn-sm btn-outline-primary">编辑</a>
+                            <a href="{% url 'dns:record_delete' r.pk %}" class="btn btn-sm btn-outline-danger ms-1">删除</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="text-center py-4 text-muted">暂无资源记录，请先选择区域或新增记录</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-warning small mt-3">
+    <strong>业务规则提醒：</strong>
+    &bull; SOA每区只能一条 &bull; NS至少保留一条 
+    &bull; CNAME不能与同名其他记录并存 &bull; A记录值必须为合法IPv4
+    &bull; AAAA必须为IPv6格式 &bull; MX必须指定优先级
+</div>
+{% endblock %}

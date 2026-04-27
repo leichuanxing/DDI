@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+
+{% block title %}转发管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-arrow-right-circle"></i> 转发管理</h4>
+    <a href="{% url 'dns:forward_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增转发规则</a>
+</div>
+
+<div class="row g-4">
+    <!-- 全局转发 -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-globe me-1"></i>全局转发配置</div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">全局转发在 options{} 块中设置，影响所有无法本地解析的查询。</p>
+                {% if global_forwarders %}
+                <div class="row align-items-center">
+                    <div class="col-auto"><span class="badge {% if global_policy == 'only' %}bg-dark{% else %}bg-info text-dark{% endif %}">{{ global_policy|default:'first' }}</span></div>
+                    <div class="col-auto"><code class="small">{{ global_forwarders }}</code></div>
+                    <div class="col-auto"><a href="{% url 'dns:options' %}" class="btn btn-sm btn-outline-primary">编辑</a></div>
+                </div>
+                {% else %}
+                <p class="text-muted small mb-0">尚未配置全局转发。可在<a href="{% url 'dns:options' %}">全局配置</a>页面中设置。</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 条件转发规则列表 -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-funnel me-1"></i>条件转发规则</div>
+            <div class="card-body p-0">
+                {% if rules %}
+                <table class="table table-hover mb-0">
+                    <thead class="table-light"><tr><th>类型</th><th>关联区域</th><th>转发目标IP</th><th>策略</th><th>状态</th><th>操作</th></tr></thead>
+                    <tbody>
+                        {% for rule in rules %}
+                        <tr>
+                            <td>
+                                {% if rule.rule_type == 'global' %}<span class="badge bg-primary">全局</span>{% else %}<span class="badge bg-info">条件</span>{% endif %}
+                            </td>
+                            <td>{{ rule.zone.name|default:'<span class="text-muted">--(全局)</span>' }}</td>
+                            <td class="font-monospace small">{{ rule.forwarders|truncatechars:60 }}</td>
+                            <td><span class="badge {% if rule.policy == "only" %}bg-dark{% else %}bg-light text-dark{% endif %}">{{ rule.get_policy_display }}</span></td>
+                            <td>{% if rule.enabled %}<span class="text-success">&#x25CF;</span>{% else %}<span class="text-muted">&#x25CB;</span>{% endif %}</td>
+                            <td>
+                                <a href="{% url 'dns:forward_edit' rule.pk %}" class="btn btn-sm btn-outline-primary">编辑</a>
+                                <a href="{% url 'dns:forward_delete' rule.pk %}" class="btn btn-sm btn-outline-danger"
+                                   onclick="return confirm('确定要删除此转发规则吗？')">删除</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-4 text-center text-muted">暂无条件转发规则</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 上游DNS测试工具 -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-speedometer me-1"></i>上游DNS连通性测试</div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <input type="text" id="test-ip" class="form-control form-control-sm" placeholder="输入IP地址测试" value="8.8.8.8" style="width:180px;">
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-outline-primary btn-sm" onclick="testForwarder()">测试连通性</button>
+                    </div>
+                    <div class="col-auto" id="test-result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if form %}
+    <!-- 新增/编辑表单 -->
+    <div class="col-12">
+        <div class="card mt-3">
+            <div class="card-header py-2">{% if edit_rule %}编辑转发规则: {{ edit_rule }}{% else %}新增转发规则{% endif %}</div>
+            <div class="card-body">
+                <form method="post" action="{% if edit_rule %}{% url 'dns:forward_edit' edit_rule.pk %}{% else %}{% url 'dns:forward_create' %}{% endif %}">{% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-2">{{ form.rule_type }}</div>
+                        <div class="col-md-2">{{ form.zone }}</div>
+                        <div class="col-md-4">{{ form.forwarders }}</div>
+                        <div class="col-md-1">{{ form.policy }}</div>
+                        <div class="col-md-1">{{ form.enabled }}</div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">保存</button>
+                            {% if edit_rule %}
+                            <a href="{% url 'dns:forward_list' %}" class="btn btn-outline-secondary ms-2">取消</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% for field in form %}
+                        {% if field.errors %}
+                        <div class="text-danger small mt-1">{{ field.errors.0 }}</div>
+                        {% endif %}
+                    {% endfor %}
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function testForwarder() {
+    const ip = document.getElementById('test-ip').value.trim();
+    if (!ip) return;
+    fetch('{% url "dns:test_forwarder" %}', {
+        method: 'POST', headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        body: 'ip=' + ip, credentials: 'same-origin'
+    }).then(r=>r.json()).then(d=>{
+        document.getElementById('test-result').innerHTML = d.success 
+            ? `<span class="text-success">&#x2713; ${ip} 可达 (${d.latency_ms||'--'}ms)</span>`
+            : `<span class="text-danger">&#x2717; ${ip} 不可达: ${d.error||''}</span>`;
+    });
+}
+</script>
+{% endblock %}

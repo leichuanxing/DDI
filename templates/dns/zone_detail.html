@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ zone.name }} - 区域详情{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4>
+        <i class="bi bi-diagram-3-square"></i> {{ zone.name }}
+        <span class="ms-2">
+            {% if zone.zone_type == 'master' %}<span class="badge bg-primary fs-6">Master</span>
+            {% elif zone.zone_type == 'slave' %}<span class="badge bg-warning text-dark fs-6">Slave</span>
+            {% elif zone.zone_type == 'forward' %}<span class="badge bg-info fs-6">Forward</span>
+            {% endif %}
+            {% if zone.direction_type == 'reverse' %}<span class="badge bg-secondary fs-6 ms-1">反向</span>{% endif %}
+            {% if not zone.enabled %}<span class="badge bg-danger fs-6 ms-1">已禁用</span>{% endif %}
+        </span>
+    </h4>
+    <div>
+        <a href="{% url 'dns:record_list' %}?zone={{ zone.pk }}" class="btn btn-primary btn-sm"><i class="bi bi-database"></i> 资源记录</a>
+        <a href="{% url 'dns:zone_edit' zone.pk %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> 编辑</a>
+        <a href="{% url 'dns:zone_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- 左侧: Zone信息卡片 -->
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header py-2">基本信息</div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless mb-0 small">
+                    <tr><td class="text-muted w-50">类型/方向</td><td><strong>{{ zone.get_zone_type_display }} / {{ zone.get_direction_type_display }}</strong></td></tr>
+                    <tr><td class="text-muted">所属View</td><td>{{ zone.view.name|default:'默认视图' }}</td></tr>
+                    <tr><td class="text-muted">文件名</td><td><code>{{ zone.file_name|default:'自动生成' }}</code></td></tr>
+                    <tr><td class="text-muted">默认TTL</td><td>{{ zone.default_ttl }} 秒</td></tr>
+                    <tr><td class="text-muted">Serial</td><td><code class="fw-bold">{{ zone.serial_no }}</code></td></tr>
+                    <tr><td class="text-muted">主NS</td><td>{{ zone.primary_ns|default:'未设置' }}</td></tr>
+                    <tr><td class="text-muted">管理员邮箱</td><td>{{ zone.admin_mail|default:'未设置' }}</td></tr>
+                    <tr><td class="text-muted">创建时间</td><td>{{ zone.created_at|date:'Y-m-d H:i:s' }}</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header py-2">SOA 时间参数</div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless mb-0 small">
+                    <tr><td class="text-muted w-50">Refresh</td><td>{{ zone.refresh }}s</td></tr>
+                    <tr><td class="text-muted">Retry</td><td>{{ zone.retry }}s</td></tr>
+                    <tr><td class="text-muted">Expire</td><td>{{ zone.expire }}s</td></tr>
+                    <tr><td class="text-muted">Minimum</td><td>{{ zone.minimum }}s</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header py-2">统计摘要</div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4 border-end">
+                        <div class="fs-4 fw-bold text-primary">{{ record_count }}</div>
+                        <small class="text-muted">总记录数</small>
+                    </div>
+                    <div class="col-4 border-end">
+                        <div class="fs-4 fw-bold text-success">{{ ns_count }}</div>
+                        <small class="text-muted">NS记录</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="fs-4 fw-bold text-info">{{ other_count|default:0 }}</div>
+                        <small class="text-muted">其他记录</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧: 资源记录列表 -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header py-2 d-flex justify-content-between">
+                <span><i class="bi bi-database me-1"></i>资源记录 ({{ record_count }})</span>
+                <a href="{% url 'dns:record_create' %}?zone={{ zone.pk }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增记录</a>
+            </div>
+            <div class="card-body p-0">
+                {% if records %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>类型</th><th>名称</th><th>TTL</th><th>值/优先级</th><th>启用</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for r in records %}
+                            <tr>
+                                <td>{% if r.record_type == 'SOA' %}<span class="badge bg-dark">SOA</span>
+                                    {% elif r.record_type == 'NS' %}<span class="badge bg-primary">NS</span>
+                                    {% elif r.record_type == 'A' %}<span class="badge bg-success">A</span>
+                                    {% elif r.record_type == 'AAAA' %}<span class="badge bg-info">AAAA</span>
+                                    {% elif r.record_type == 'CNAME' %}<span class="badge bg-warning text-dark">CNAME</span>
+                                    {% elif r.record_type == 'MX' %}<span class="badge bg-danger">MX</span>
+                                    {% else %}<span class="badge bg-secondary">{{ r.record_type }}</span>
+                                    {% endif %}</td>
+                                <td><strong>{{ r.name }}</strong></td>
+                                <td class="text-muted small">{{ r.ttl|default:'-' }}</td>
+                                <td>
+                                    {% if r.record_type == 'MX' or r.record_type == 'SRV' %}
+                                        <span class="text-muted">{{ r.priority }}</span> {{ r.value|truncatechars:40 }}
+                                    {% elif r.record_type == 'TXT' %}
+                                        <code>"{{ r.value|truncatechars:40 }}"</code>
+                                    {% else %}
+                                        {{ r.value|truncatechars:50 }}
+                                    {% endif %}
+                                </td>
+                                <td>{% if r.enabled %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-x-circle-fill text-muted"></i>{% endif %}</td>
+                                <td>
+                                    <a href="{% url 'dns:record_edit' r.pk %}" class="btn btn-sm btn-outline-primary">编辑</a>
+                                    <a href="{% url 'dns:record_delete' r.pk %}" class="btn btn-sm btn-outline-danger">删除</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <p>暂无资源记录</p>
+                    <a href="{% url 'dns:record_create' %}?zone={{ zone.pk }}" class="btn btn-primary btn-sm mt-2"><i class="bi bi-plus-lg"></i> 添加第一条记录</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

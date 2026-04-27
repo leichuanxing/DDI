@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}区域管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-diagram-3-square"></i> 区域 (Zone) 管理</h4>
+    <a href="{% url 'dns:zone_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增区域</a>
+</div>
+
+<!-- 筛选栏 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-auto">
+                {{ search_form.search }}
+            </div>
+            <div class="col-auto">
+                {{ search_form.zone_type }}
+            </div>
+            <div class="col-auto">
+                {{ search_form.direction_type }}
+            </div>
+            <div class="col-auto">
+                {{ search_form.enabled }}
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 搜索</button>
+                <a href="{% url 'dns:zone_list' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 区域列表 -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th><th>区域名称</th><th>类型</th><th>方向</th>
+                        <th>View</th><th>记录数</th><th>TTL</th><th>状态</th><th>Serial</th><th>创建时间</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for zone in zones %}
+                    <tr>
+                        <td>{{ zone.id }}</td>
+                        <td><strong>{{ zone.name }}</strong></td>
+                        <td>
+                            {% if zone.zone_type == 'master' %}<span class="badge bg-primary">Master</span>
+                            {% elif zone.zone_type == 'slave' %}<span class="badge bg-warning text-dark">Slave</span>
+                            {% elif zone.zone_type == 'forward' %}<span class="badge bg-info">Forward</span>
+                            {% else %}<span class="badge bg-secondary">{{ zone.get_zone_type_display }}</span>{% endif %}
+                        </td>
+                        <td>{% if zone.direction_type == 'forward' %}<span class="text-success">正向</span>{% else %}<span class="text-warning">反向</span>{% endif %}</td>
+                        <td>{{ zone.view.name|default:'<span class="text-muted">默认</span>' }}</td>
+                        <td><span class="badge bg-secondary">{{ zone.record_cnt|default:0 }}</span></td>
+                        <td class="font-monospace small">{{ zone.default_ttl }}s</td>
+                        <td>{% if zone.enabled %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">禁用</span>{% endif %}</td>
+                        <td class="font-monospace small">{{ zone.serial_no }}</td>
+                        <td style="white-space:nowrap;font-size:12px;">{{ zone.created_at|date:'m-d H:i' }}</td>
+                        <td>
+                            <a href="{% url 'dns:zone_detail' zone.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
+                            <a href="{% url 'dns:record_list' %}?zone={{ zone.pk }}" class="btn btn-sm btn-outline-primary ms-1" title="记录管理"><i class="bi bi-database"></i></a>
+                            <a href="{% url 'dns:zone_edit' zone.pk %}" class="btn btn-sm btn-outline-primary ms-1">编辑</a>
+                            <a href="{% url 'dns:zone_check' zone.pk %}" class="btn btn-sm btn-outline-success ms-1" title="校验"><i class="bi bi-check-circle"></i></a>
+                            <a href="{% url 'dns:zone_reload' zone.pk %}" class="btn btn-sm btn-outline-warning ms-1" title="Reload"><i class="bi bi-arrow-repeat"></i></a>
+                            <a href="{% url 'dns:zone_delete' zone.pk %}" class="btn btn-sm btn-outline-danger ms-1">删除</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="11" class="text-center py-4 text-muted">暂无区域数据，点击"新增区域"添加</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

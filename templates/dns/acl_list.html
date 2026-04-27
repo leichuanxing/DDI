@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}ACL管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-shield-lock"></i> ACL 管理</h4>
+    <a href="{% url 'dns:acl_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增ACL</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr><th>ID</th><th>ACL名称</th><th>描述</th><th>条目数</th><th>内置</th><th>被引用(视图)</th><th>创建时间</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                    {% for acl in acls %}
+                    <tr>
+                        <td>{{ acl.id }}</td>
+                        <td><strong>{% if acl.built_in %}<code>{{ acl.name }}</code>{% else %}{{ acl.name }}{% endif %}</strong></td>
+                        <td class="text-truncate" style="max-width:150px;">{{ acl.description|truncatechars:30 }}</td>
+                        <td><span class="badge bg-info">{{ acl.item_count }}</span></td>
+                        <td>{% if acl.built_in %}<span class="badge bg-secondary">内置</span>{% else %}<span class="text-muted">--</span>{% endif %}</td>
+                        <td>
+                            {% with v1=acl.used_in_view_clients.count v2=acl.used_in_view_dests.count %}
+                            {% if v1 or v2 %}<span class="badge bg-warning text-dark">{{ v1|add:v2 }}</span>{% else %}<span class="text-muted">0</span>{% endif %}
+                            {% endwith %}
+                        </td>
+                        <td style="white-space:nowrap;font-size:13px;">{{ acl.created_at|date:'Y-m-d H:i' }}</td>
+                        <td>
+                            <a href="{% url 'dns:acl_detail' acl.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
+                            {% if not acl.built_in %}
+                            <a href="{% url 'dns:acl_edit' acl.pk %}" class="btn btn-sm btn-outline-primary ms-1">编辑</a>
+                            <a href="{% url 'dns:acl_delete' acl.pk %}" class="btn btn-sm btn-outline-danger ms-1">删除</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center py-4 text-muted">暂无ACL定义，点击"新增ACL"创建</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if is_paginated %}
+        <div class="card-footer">{% include 'pagination.html' %}</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="alert alert-info small mt-3">
+    <strong>说明：</strong>
+    ACL（Access Control List）用于定义命名的IP地址匹配列表，可在options、view、zone的allow-query/allow-transfer等指令中引用。
+    内置ACL（any/none/localhost/localnets）不可删除。
+</div>
+{% endblock %}

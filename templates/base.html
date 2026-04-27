@@ -377,48 +377,17 @@
                     <a href="{% url 'ipam:ip_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ip_list' or request.resolver_match.url_name == 'ip_allocate' or request.resolver_match.url_name == 'ip_release' or request.resolver_match.url_name == 'ip_set_status' %}current{% endif %}"><span>IP 地址</span></a>
                     <a href="{% url 'ipam:scan_index' %}" class="submenu-item {% if request.resolver_match.url_name == 'scan_index' or request.resolver_match.url_name == 'scan_create' or request.resolver_match.url_name == 'scan_detail' or request.resolver_match.url_name == 'scan_execute' or request.resolver_match.url_name == 'scan_progress' or request.resolver_match.url_name == 'scan_cancel' or request.resolver_match.url_name == 'scan_export' or request.resolver_match.url_name == 'scan_delete' or request.resolver_match.url_name == 'probe_history' or request.resolver_match.url_name == 'discovery_rules' or request.resolver_match.url_name == 'live_topology' %}current{% endif %}"
                        style="{% if request.resolver_match.url_name == 'scan_index' or request.resolver_match.url_name == 'scan_create' or request.resolver_match.url_name == 'scan_detail' or request.resolver_match.url_name == 'scan_execute' or request.resolver_match.url_name == 'scan_progress' or request.resolver_match.url_name == 'scan_cancel' or request.resolver_match.url_name == 'scan_export' or request.resolver_match.url_name == 'scan_delete' or request.resolver_match.url_name == 'probe_history' or request.resolver_match.url_name == 'discovery_rules' or request.resolver_match.url_name == 'live_topology' %}color:#4fd1c5;font-weight:600;{% endif %}">
-                        <span><i class="bi bi-radar me-1"></i>网络探测</span>
+                        <span>网络探测</span>
                     </a>
                     <a href="{% url 'ipam:switch_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'switch_list' or request.resolver_match.url_name == 'switch_create' or request.resolver_match.url_name == 'switch_edit' or request.resolver_match.url_name == 'switch_delete' or request.resolver_match.url_name == 'switch_test' %}current{% endif %}"
                        style="{% if request.resolver_match.url_name == 'switch_list' or request.resolver_match.url_name == 'switch_create' or request.resolver_match.url_name == 'switch_edit' or request.resolver_match.url_name == 'switch_delete' or request.resolver_match.url_name == 'switch_test' %}color:#4fd1c5;font-weight:600;{% endif %}">
-                        <span><i class="bi bi-hdd-network me-1"></i>交换机设备管理</span>
+                        <span>交换机设备管理</span>
                     </a>
                 </div>
             </div>
 
-            <!-- === DNS 管理 === -->
-            <div class="menu-group">
-                <div class="menu-header {% if request.resolver_match.app_name == 'dnsmgr' %}active{% endif %}"
-                     data-bs-toggle="collapse"
-                     aria-expanded="{% if request.resolver_match.app_name == 'dnsmgr' %}true{% else %}false{% endif %}">
-                    <i class="bi bi-globe menu-icon"></i>
-                    <span class="menu-title">DNS 管理</span>
-                    <i class="bi bi-chevron-right arrow"></i>
-                </div>
-                <div class="submenu collapse {% if request.resolver_match.app_name == 'dnsmgr' %}show{% endif %}">
-                    <a href="{% url 'dnsmgr:dns_service' %}" class="submenu-item {% if request.resolver_match.url_name == 'dns_service' or request.resolver_match.url_name == 'dns_resolve_test' %}current{% endif %}"><span>DNS 服务</span></a>
-                    <a href="{% url 'dnsmgr:zone_list' %}" class="submenu-item {%if request.resolver_match.url_name == 'zone_list' or request.resolver_match.url_name == 'zone_create' or request.resolver_match.url_name == 'zone_detail' or request.resolver_match.url_name == 'zone_edit' or request.resolver_match.url_name == 'zone_delete' or request.resolver_match.url_name == 'record_list' or request.resolver_match.url_name == 'record_create' or request.resolver_match.url_name == 'record_edit' or request.resolver_match.url_name == 'record_delete' or request.resolver_match.url_name == 'toggle_record' %}current{% endif %}"><span>区域与记录</span></a>
-                    <a href="{% url 'dnsmgr:service_probe' %}" class="submenu-item {%if request.resolver_match.url_name == 'service_probe' or request.resolver_match.url_name == 'service_probe_api' or request.resolver_match.url_name == 'probe_task_list' or request.resolver_match.url_name == 'probe_task_create' or request.resolver_match.url_name == 'probe_task_update' or request.resolver_match.url_name == 'probe_task_delete' %}current{% endif %}"><span>服务探测</span></a>
-                    <a href="{% url 'dnsmgr:query_log' %}" class="submenu-item {%if request.resolver_match.url_name == 'query_log' or request.resolver_match.url_name == 'query_log_clear' %}current{% endif %}"><span>解析日志</span></a>
-                </div>
-            </div>
 
-            <!-- === DHCP 管理 === -->
-            <div class="menu-group">
-                <div class="menu-header {% if request.resolver_match.app_name == 'dhcpmgr' %}active{% endif %}"
-                     data-bs-toggle="collapse"
-                     aria-expanded="{% if request.resolver_match.app_name == 'dhcpmgr' %}true{% else %}false{% endif %}">
-                    <i class="bi bi-wifi menu-icon"></i>
-                    <span class="menu-title">DHCP 管理</span>
-                    <i class="bi bi-chevron-right arrow"></i>
-                </div>
-                <div class="submenu collapse {%if request.resolver_match.app_name == 'dhcpmgr' %}show{% endif %}">
-                    <a href="{% url 'dhcpmgr:pool_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'pool_list' or request.resolver_match.url_name == 'pool_create' or request.resolver_match.url_name == 'pool_detail' or request.resolver_match.url_name == 'pool_edit' or request.resolver_match.url_name == 'pool_delete' or request.resolver_match.url_name == 'toggle_pool' or request.resolver_match.url_name == 'exclusion_create' or request.resolver_match.url_name == 'exclusion_edit' or request.resolver_match.url_name == 'exclusion_delete' %}current{% endif %}"><span>地址池</span></a>
-                    <a href="{% url 'dhcpmgr:lease_list' %}" class="submenu-item {%if request.resolver_match.url_name == 'lease_list' or request.resolver_match.url_name == 'lease_create' or request.resolver_match.url_name == 'lease_release' or request.resolver_match.url_name == 'check_expired' %}current{% endif %}"><span>租约管理</span></a>
-                    <a href="{% url 'dhcpmgr:log_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'log_list' or request.resolver_match.url_name == 'log_clear' %}current{% endif %}"><span>地址获取日志</span></a>
-                    <a href="{% url 'dhcpmgr:service' %}" class="submenu-item {%if request.resolver_match.url_name == 'service' or request.resolver_match.url_name == 'service_start' or request.resolver_match.url_name == 'service_stop' or request.resolver_match.url_name == 'service_status' %}current{% endif %}"><span>服务状态</span></a>
-                </div>
-            </div>
+
 
             <!-- === 设备管理 === -->
             <div class="menu-group">
@@ -431,6 +400,33 @@
                 </div>
                 <div class="submenu collapse {%if request.resolver_match.app_name == 'devices' %}show{% endif %}">
                     <a href="{% url 'devices:device_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'device_list' or request.resolver_match.url_name == 'device_create' or request.resolver_match.url_name == 'device_detail' or request.resolver_match.url_name == 'device_edit' or request.resolver_match.url_name == 'device_delete' or request.resolver_match.url_name == 'link_ip' %}current{% endif %}"><span>设备主机</span></a>
+                </div>
+            </div>
+
+            <!-- === DNS管理 === -->
+            <div class="menu-group">
+                <div class="menu-header {% if request.resolver_match.app_name == 'dns' %}active{% endif %}"
+                     data-bs-toggle="collapse"
+                     aria-expanded="{% if request.resolver_match.app_name == 'dns' %}true{% else %}false{% endif %}">
+                    <i class="bi bi-globe2 menu-icon"></i>
+                    <span class="menu-title">DNS管理</span>
+                    <i class="bi bi-chevron-right arrow"></i>
+                </div>
+                <div class="submenu collapse {%if request.resolver_match.app_name == 'dns' %}show{% endif %}">
+                    <a href="{% url 'dns:dashboard' %}" class="submenu-item {% if request.resolver_match.url_name == 'dashboard' %}current{% endif %}"><span>DNS仪表盘</span></a>
+                    <a href="{% url 'dns:service' %}" class="submenu-item {% if request.resolver_match.url_name == 'service' or request.resolver_match.url_name == 'api_service_action' %}current{% endif %}"><span>DNS服务管理</span></a>
+                    <a href="{% url 'dns:config_sync' %}" class="submenu-item {% if request.resolver_match.url_name == 'config_sync' or request.resolver_match.url_name == 'api_sync_execute' %}current{% endif %}"><span>配置同步</span></a>
+                    <a href="{% url 'dns:options' %}" class="submenu-item {% if request.resolver_match.url_name == 'options' or request.resolver_match.url_name == 'global_option_preview' %}current{% endif %}"><span>全局配置</span></a>
+                    <a href="{% url 'dns:acl_list' %}" class="submenu-item {% if 'acl_' in request.resolver_match.url_name %}current{% endif %}"><span>ACL管理</span></a>
+                    <a href="{% url 'dns:view_list' %}" class="submenu-item {% if 'view_' in request.resolver_match.url_name and request.resolver_match.url_name != 'view_preview' %}current{% endif %}"><span>View视图管理</span></a>
+                    <a href="{% url 'dns:zone_list' %}" class="submenu-item {% if 'zone_' in request.resolver_match.url_name and request.resolver_match.url_name != 'zone_preview' %}current{% endif %}"><span>区域管理</span></a>
+                    <a href="{% url 'dns:record_list' %}" class="submenu-item {% if 'record_' in request.resolver_match.url_name or request.resolver_match.url_name == 'batch_import' or request.resolver_match.url_name == 'batch_export' %}current{% endif %}"><span>资源记录管理</span></a>
+                    <a href="{% url 'dns:forward_list' %}" class="submenu-item {% if 'forward' in request.resolver_match.url_name and request.resolver_match.url_name != 'forward_list' and request.resolver_match.url_name != 'test_forwarder' and request.resolver_match.url_name != 'forward_create' and request.resolver_match.url_name != 'forward_delete' %}current{% endif %}"><span>转发管理</span></a>
+                    <a href="{% url 'dns:sync_status' %}" class="submenu-item {% if request.resolver_match.url_name == 'sync_status' or request.resolver_match.url_name == 'trigger_sync' %}current{% endif %}"><span>主从同步</span></a>
+                    <a href="{% url 'dns:log_center' %}" class="submenu-item {% if request.resolver_match.url_name == 'log_center' %}current{% endif %}"><span>日志中心</span></a>
+                    <a href="{% url 'dns:publish_list' %}" class="submenu-item {% if 'publish' in request.resolver_match.url_name and request.resolver_match.url_name != 'publish_list' %}current{% endif %}"><span>发布中心</span></a>
+                    <a href="{% url 'dns:backup_list' %}" class="submenu-item {% if 'backup' in request.resolver_match.url_name and request.resolver_match.url_name != 'backup_list' %}current{% endif %}"><span>备份回滚</span></a>
+                    <a href="{% url 'dns:audit' %}" class="submenu-item {% if request.resolver_match.url_name == 'audit' %}current{% endif %}"><span>审计日志</span></a>
                 </div>
             </div>
 
@@ -505,8 +501,8 @@
     {% block login_content %}{% endblock %}
     {% endif %}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'js/chart.umd.min.js' %}"></script>
     {% block extra_js %}{% endblock %}
     <!-- CSRF Token -->
     {% csrf_token %}

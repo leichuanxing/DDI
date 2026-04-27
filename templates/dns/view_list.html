@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}View视图管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-layers"></i> View 视图管理</h4>
+    <a href="{% url 'dns:view_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新增View</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr><th>ID</th><th>View名称</th><th>match-clients</th><th>match-destinations</th><th>递归</th><th>关联Zone数</th><th>排序</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                    {% for v in views %}
+                    <tr>
+                        <td>{{ v.id }}</td>
+                        <td><strong>{{ v.name }}</strong></td>
+                        <td>{% if v.match_clients.exists %}<span class="badge bg-info">{{ v.match_clients.all|join:', ' }}</span>{% else %}<span class="text-muted">--</span>{% endif %}</td>
+                        <td>{% if v.match_destinations.exists %}<span class="badge bg-info">{{ v.match_destinations.all|join:', ' }}</span>{% else %}<span class="text-muted">--</span>{% endif %}</td>
+                        <td>{% if v.recursion == True %}<span class="badge bg-success">yes</span>{% elif v.recursion == False %}<span class="badge bg-danger">no</span>{% else %}<span class="text-muted small">继承全局</span>{% endif %}</td>
+                        <td><span class="badge bg-secondary">{{ v.zone_count }}</span></td>
+                        <td>{{ v.order_index }}</td>
+                        <td>
+                            <a href="{% url 'dns:view_edit' v.pk %}" class="btn btn-sm btn-outline-primary">编辑</a>
+                            <a href="{% url 'dns:view_preview' v.pk %}" class="btn btn-sm btn-outline-info ms-1">预览</a>
+                            <a href="{% url 'dns:view_delete' v.pk %}" class="btn btn-sm btn-outline-danger ms-1">删除</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center py-4 text-muted">暂无View定义，点击"新增View"创建</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info small mt-3">
+    <strong>View 说明：</strong>BIND9 View允许根据客户端来源提供不同的DNS解析结果。
+    常见用途：<br>
+    &bull; 内网/外网分别解析<br>
+    &bull; 不同运营商返回不同IP<br>
+    &bull; 测试环境与生产环境分离
+</div>
+{% endblock %}

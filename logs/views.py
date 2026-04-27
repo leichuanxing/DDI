@@ -44,7 +44,6 @@ class OperationLogListView(ListView):
         context['modules'] = [
             ('ipam', 'IPAM'),
             ('dns', 'DNS管理'),
-            ('dhcp', 'DHCP管理'),
             ('devices', '设备管理'),
             ('accounts', '用户管理'),
         ]

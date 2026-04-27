@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}确认删除记录 - {{ object.record_type }} {{ object.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-trash3 text-danger"></i> 确认删除资源记录</h4>
+    <a href="{% url 'dns:record_list' %}?zone={{ object.zone.pk }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回列表</a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger bg-opacity-10 text-danger py-2 fw-bold">
+                <i class="bi bi-exclamation-triangle me-1"></i>此操作不可撤销
+            </div>
+            <div class="card-body p-4">
+                <p class="mb-2">您确定要删除以下资源记录吗？</p>
+
+                <table class="table table-bordered table-sm mb-4">
+                    <tbody>
+                        <tr><th width="120">区域</th><td>{{ object.zone.name }}</td></tr>
+                        <tr><th>类型</th><td><span class="badge bg-secondary">{{ object.record_type }}</span></td></tr>
+                        <tr><th>名称</th><td>{{ object.name }}</td></tr>
+                        <tr><th>值</th><td class="font-monospace small">{{ object.value|truncatechars:80 }}</td></tr>
+                    </tbody>
+                </table>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger me-2"><i class="bi bi-trash3"></i> 确认删除</button>
+                    <a href="{% url 'dns:record_list' %}?zone={{ object.zone.pk }}" class="btn btn-outline-secondary">取消</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

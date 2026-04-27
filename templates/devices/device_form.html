@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}设备{% endblock %}
 
@@ -7,6 +8,7 @@
 <link href="{% static 'css/select2-bootstrap-5-theme.min.css' %}" rel="stylesheet" />
 <style>
 .select2-container { width: 100% !important; }
+.input-group > .select2-container { flex-grow: 1; }
 </style>
 {% endblock %}
 
@@ -54,7 +56,10 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">关联IP地址</label>
-                    {{ form.ip_address }}
+                    <div class="input-group">
+                        {{ form.ip_address }}
+                        <button class="btn btn-outline-secondary" type="button" id="btn-ip-search" title="搜索IP地址"><i class="bi bi-search"></i></button>
+                    </div>
                 </div>
                 <div class="col-12">
                     <label class="form-label">备注/描述</label>
@@ -71,8 +76,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/jquery.min.js' %}"></script>
+<script src="{% static 'js/select2.min.js' %}"></script>
 <script>
 $(document).ready(function() {
     $('#id_ip_address').select2({
@@ -80,6 +85,10 @@ $(document).ready(function() {
         allowClear: true,
         theme: 'bootstrap-5',
         language: 'zh-CN'
+    });
+    // 搜索按钮点击打开Select2下拉
+    $('#btn-ip-search').on('click', function() {
+        $('#id_ip_address').select2('open');
     });
 });
 </script>

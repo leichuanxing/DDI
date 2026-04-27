@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}备份回滚{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-clock-history"></i> 备份回滚</h4>
+    <button class="btn btn-outline-primary btn-sm" onclick="manualBackup()"><i class="bi bi-plus-circle me-1"></i> 手动创建备份</button>
+</div>
+
+<!-- 统计摘要 -->
+<div class="row g-3 mb-3">
+    <div class="col-auto"><span class="badge bg-secondary fs-6">共 {{ total_backups|default:0 }} 个备份</span></div>
+    {% if auto_backups %}<div class="col-auto"><span class="badge bg-info">自动 {{ auto_backups }}</span></div>{% endif %}
+    {% if manual_backups %}<div class="col-auto"><span class="badge bg-warning text-dark">手动 {{ manual_backups }}</span></div>{% endif %}
+</div>
+
+<div class="alert alert-info small">
+    <strong>备份策略：</strong>
+    每次发布前自动备份当前正式配置到备份库。可查看历史版本、比较差异、一键回滚。
+    回滚操作会：1) 备份当前配置 2) 恢复目标版本 3) 执行 reload 4) 记录审计日志
+</div>
+
+<div class="row g-4">
+    <!-- 左侧: 备份版本时间线 -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-clock-history me-1"></i>备份历史</div>
+            <div class="card-body p-0" style="max-height:500px;overflow-y:auto;">
+                {% if backups %}
+                <div class="list-group list-group-flush">
+                    {% for backup in backups %}
+                    <div class="list-group-item d-flex justify-content-between align-items-start py-3">
+                        <div class="ms-3 me-auto">
+                            <div class="fw-bold mb-1">
+                                {% if backup.version %}
+                                v{{ backup.version.version_number }}
+                                ({{ backup.version.get_status_display }})
+                                {% else %}
+                                手动备份 #{{ backup.id }}
+                                {% endif %}
+                                - {{ backup.get_backup_type_display }}
+                            </div>
+                            <small class="text-muted">
+                                大小: {{ backup.file_size|filesizeformat }} | 
+                                时间: {{ backup.backup_time|date:'Y-m-d H:i:s' }} |
+                                操作人: {{ backup.backup_user|default:'系统' }}
+                                {% if backup.notes %}<br>备注: {{ backup.notes|truncatechars:50 }}{% endif %}
+                            </small>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <a href="{% url 'dns:backup_detail' backup.pk %}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i></a>
+                            <a href="{% url 'dns:confirm_rollback' backup.pk %}" 
+                               class="btn btn-sm btn-outline-danger"
+                               onclick="return confirm('确定要回滚到此版本吗？当前配置将被替换！');"
+                               title="回滚到该版本"><i class="bi bi-arrow-counterclockwise"></i> 回滚</a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-5 text-center text-muted">暂无备份数据。首次发布后自动生成备份。</div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="p-5 text-center text-muted">
+                    <i class="bi bi-archive fs-1 opacity-25 d-block mb-2"></i>
+                    <p>暂无备份记录</p>
+                    <p class="small">执行发布后将自动生成备份</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧: 备份详情 -->
+    <div class="col-lg-4">
+        {% if backup %}
+        <div class="card mb-3">
+            <div class="card-header py-2">备份详情 #{{ backup.pk }}</div>
+            <div class="card-body small">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr><td class="text-muted w-50">类型</td><td>{{ backup.get_backup_type_display }}</td></tr>
+                    <tr><td class="text-muted">关联版本</td><td>{{ backup.version.version_number|default:'--' }}</td></tr>
+                    <tr><td class="text-muted">文件大小</td><td>{{ backup.file_size|filesizeformat }}</td></tr>
+                    <tr><td class="text-muted">存储路径</td><td><code>{{ backup.storage_path|default:'数据库存储' }}</code></td></tr>
+                    <tr><td class="text-muted">备份时间</td><td>{{ backup.backup_time|date:'Y-m-d H:i:s' }}</td></tr>
+                    <tr><td class="text-muted">操作人</td><td>{{ backup.backup_user|default:'--' }}</td></tr>
+                    <tr><td class="text-muted">备注</td><td>{{ backup.notes|default:'--' }}</td></tr>
+                </table>
+                
+                <hr>
+                <h6>配置文件预览（前200行）</h6>
+                <pre class="bg-dark text-success p-2 rounded font-monospace small" style="max-height:300px;overflow:auto;">{{ backup.config_content|truncatechars:5000 }}</pre>
+            </div>
+        </div>
+        
+        <div class="d-grid gap-2">
+            <a href="{% url 'dns:confirm_rollback' backup.pk %}" 
+               class="btn btn-danger" id="rollback-btn"
+               onclick="return confirm('确定要回滚到此备份版本吗？\n\n此操作将:\n1. 备份当前配置\n2. 替换为所选备份\n3. 执行reload\n\n确定继续？');">
+                <i class="bi bi-arrow-counterclockwise"></i> 一键回滚到该版本
+            </a>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center text-muted p-4">
+                <i class="bi bi-box-arrow-in-down fs-1 opacity-25 d-block mb-2"></i>
+                <p>选择左侧一个备份查看详情</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function manualBackup() {
+    const notes = prompt('请输入备份备注:', '手动备份 - ' + new Date().toLocaleString());
+    if (notes === null) return;
+
+    fetch('{% url "dns:api_manual_backup" %}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        body: 'notes=' + encodeURIComponent(notes),
+        credentials: 'same-origin'
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            alert(`备份创建成功！\n#${d.backup_id}\n${d.message}`);
+            location.reload();
+        } else {
+            alert('失败: ' + (d.error || '未知错误'));
+        }
+    });
+}
+</script>
+{% endblock %}

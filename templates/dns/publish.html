@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+
+{% block title %}发布中心{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-cloud-upload"></i> 发布中心</h4>
+    {% if pending_count > 0 %}
+    <button class="btn btn-success btn-sm" onclick="quickPublish()"><i class="bi bi-lightning-fill"></i> 一键发布 ({{ pending_count }} 项待发布)</button>
+    {% endif %}
+</div>
+
+{% if last_publish %}
+<div class="alert alert-info small py-2">
+    <i class="bi bi-clock me-1"></i> 上次发布: <strong>v{{ last_publish.version_number }}</strong>
+    @ {{ last_publish.publish_time|date:'Y-m-d H:i:s' }} by {{ last_publish.publisher|default:'--' }}
+</div>
+{% elif is_first_publish %}
+<div class="alert alert-warning small py-2">
+    <i class="bi bi-exclamation-triangle me-1"></i> <strong>首次发布：</strong>检测到 {{ pending_count }} 个待发布对象，点击"一键发布"将配置正式生效到 BIND9
+</div>
+{% endif %}
+
+<!-- 发布流程说明 -->
+<div class="alert alert-info small">
+    <strong>发布流程：</strong> 草稿修改 → 待发布队列 → 业务校验 → named-checkconf/checkzone → 备份当前配置 → 写入正式目录 → reload/reconfig → 成功记录
+</div>
+
+<div class="row g-4">
+    <!-- 左侧: 待发布对象 -->
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header py-2 d-flex justify-content-between">
+                <span><i class="bi bi-inbox me-1"></i>待发布变更对象</span>
+                {% if pending|length > 0 %}
+                <button class="btn btn-success btn-sm" onclick="showPublishConfirm()">执行发布</button>
+                {% endif %}
+            </div>
+            <div class="card-body p-0" style="max-height:450px;overflow-y:auto;">
+                {% if pending %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>对象类型</th><th>标识</th><th>操作</th><th>Diff预览</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for obj in pending %}
+                        <tr>
+                            <td><span class="badge bg-{% if obj.action == 'create' %}success{% elif obj.action == 'delete' %}danger{% else %}primary{% endif %}">{{ obj.object_type }}</span></td>
+                            <td>{{ obj.object_name }}</td>
+                            <td><span class="badge bg-light text-dark">{{ obj.action }}</span></td>
+                            <td class="text-truncate font-monospace small" style="max-width:250px;">{{ obj.diff_content|truncatechars:80|default:'--' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-check-circle fs-1 opacity-25 d-block mb-2"></i>
+                    {% if is_first_publish %}
+                    <p>尚未发现可发布的配置对象</p>
+                    <p class="small">请先创建 Zone（区域）、ACL 或 View，再回到发布中心发布</p>
+                    <a href="{% url 'dns:zone_create' %}" class="btn btn-outline-primary btn-sm mt-2"><i class="bi bi-plus me-1"></i>创建第一个区域</a>
+                    {% else %}
+                    <p>暂无待发布的变更</p>
+                    <p class="small">所有配置已为最新发布状态</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧: 发布历史 -->
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-clock-history me-1"></i>发布历史</div>
+            <div class="card-body p-0" style="max-height:300px;overflow-y:auto;">
+                {% if versions %}
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light"><tr><th>#</th><th>版本号</th><th>状态</th><th>对象数</th><th>时间</th><th>操作</th></tr></thead>
+                    <tbody>
+                        {% for v in versions %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><code>v{{ v.version_number }}</code></td>
+                            <td>
+                                {% if v.status == 'success' %}<span class="badge bg-success">成功</span>
+                                {% elif v.status == 'failed' %}<span class="badge bg-danger">失败</span>
+                                {% elif v.status == 'rolled_back' %}<span class="badge bg-secondary">已回滚</span>
+                                {% else %}<span class="badge bg-warning text-dark">{{ v.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ v.object_count }}</td>
+                            <td style="white-space:nowrap;font-size:12px;">{{ v.publish_time|date:'m-d H:i:s'|default:v.created_at|date:'m-d H:i:s' }}</td>
+                            <td><a href="{% url 'dns:publish_detail' v.pk %}" class="btn btn-sm btn-outline-info">详情</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="p-3 text-center text-muted small">暂无发布记录</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 版本详情（选中时显示） -->
+        {% if version %}
+        <div class="card">
+            <div class="card-header py-2">版本详情: v{{ version.version_number }}</div>
+            <div class="card-body small">
+                <div class="row g-2 mb-2">
+                    <div class="col-4 text-muted">状态:</div><div class="col-8">{{ version.get_status_display }}</div>
+                    <div class="col-4 text-muted">发布人:</div><div class="col-8">{{ version.publisher|default:'--' }}</div>
+                    <div class="col-4 text-muted">发布时间:</div><div class="col-8">{{ version.publish_time|date:'Y-m-d H:i:s'|default:'--' }}</div>
+                    <div class="col-4 text-muted">checkconf:</div><div class="col-8">{{ version.checkconf_passed|yesno:'--' }}</div>
+                </div>
+                
+                {% if objects %}
+                <hr>
+                <strong>变更对象列表 ({{ objects|length }}):</strong>
+                <div class="mt-1 max-h-40 overflow-auto">
+                    {% for obj in objects %}
+                    <div class="py-1 border-bottom">
+                        <span class="badge bg-light text-dark me-1">{{ obj.action }}</span>
+                        <strong>{{ obj.object_type }}</strong>: {{ obj.object_name }}
+                        {% if obj.check_result %}[{{ obj.check_result }}]{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if version.status == 'pending' %}
+                <div class="mt-3 pt-2 border-top">
+                    <a href="{% url 'dns:publish_confirm' version.pk %}" class="btn btn-success btn-sm w-100"><i class="bi bi-cloud-upload"></i> 确认发布此版本</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="publish-confirm-modal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h6 class="modal-title"><i class="bi bi-cloud-upload me-1"></i>确认发布</h6>
+                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>即将执行以下操作：</p>
+                <ol class="mb-2">
+                    <li>业务规则校验</li>
+                    <li>named-checkconf 全局校验</li>
+                    <li>named-checkzone 各区域校验</li>
+                    <li>备份当前正式配置</li>
+                    <li>写入新配置到正式目录</li>
+                    <li>执行 reload 让 named 加载新配置</li>
+                </ol>
+                <p class="text-danger fw-bold">注意：发布后将立即生效！</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-success btn-sm" onclick="executePublish()">确认发布</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showPublishConfirm() { new bootstrap.Modal(document.getElementById('publish-confirm-modal')).show(); }
+
+function executePublish() {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = document.getElementById('publish-confirm-modal').querySelector('.btn-success').closest('a')?.href || '';
+    if (!form.action) return;
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrf) { const i = document.createElement('input'); i.type='hidden'; i.name='csrfmiddlewaretoken'; i.value=csrf.value; form.appendChild(i); }
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function quickPublish() {
+    if (!confirm('确定要执行一键发布吗？\n\n将自动完成:\n1. 收集所有待发布变更\n2. 业务规则校验\n3. BIND9配置语法校验\n4. 备份当前配置\n5. 写入新配置并reload')) return;
+
+    fetch('{% url "dns:api_quick_publish" %}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+        credentials: 'same-origin'
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            alert(`发布成功！\n${d.message}\n${d.warnings ? '提示: ' + d.warnings.join('; ') : ''}`);
+            location.reload();
+        } else {
+            alert('发布失败: ' + (d.error || '未知错误'));
+        }
+    }).catch(e => alert('请求异常: ' + e.message));
+}
+</script>
+{% endblock %}

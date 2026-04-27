@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}日志中心{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-journal-text"></i> 日志中心</h4>
+    <div class="d-flex gap-2 align-items-center">
+        {% if category_stats %}
+        <span class="badge bg-secondary">共 {{ total_count }} 条</span>
+        {% endif %}
+        <button class="btn btn-outline-primary btn-sm" onclick="location.reload()"><i class="bi bi-arrow-repeat"></i> 刷新</button>
+        <a href="?type={{ log_type }}&export=1" class="btn btn-outline-success btn-sm"><i class="bi bi-download"></i> 导出CSV</a>
+    </div>
+</div>
+
+<!-- 分类统计条 -->
+{% if category_stats %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+    {% for cat_key, cat_count in category_stats.items %}
+    <a href="?category={{ cat_key }}" class="text-decoration-none">
+        <span class="badge bg-light text-dark border">{{ cat_key }}: {{ cat_count }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- 日志类型Tab -->
+<ul class="nav nav-tabs mb-3" id="logTabs">
+    {% for lt_key, lt_label in log_types %}
+    <li class="nav-item">
+        <a class="nav-link {% if log_type == lt_key %}active{% endif %}"
+           href="?type={{ lt_key }}">{{ lt_label }}</a>
+    </li>
+    {% endfor %}
+</ul>
+
+<!-- 搜索筛选 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-auto flex-grow-1">
+                <input type="text" name="search" class="form-control form-control-sm" placeholder="搜索对象/操作/详情..." value="{{ current_search }}">
+            </div>
+            <div class="col-auto">
+                <select name="category" class="form-select form-select-sm" style="width:150px;">
+                    <option value="">全部分类</option>
+                    {% for c_val, c_label in DnsAuditLog.CATEGORY_CHOICES %}
+                    <option value="{{ c_val }}" {% if current_category == c_val %}selected{% endif %}>{{ c_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <input type="datetime-local" name="start_time" class="form-control form-control-sm" style="width:200px;">
+            </div>
+            <div class="col-auto">
+                <input type="datetime-local" name="end_time" class="form-control form-control-sm" style="width:200px;">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
+                <a href="{% url 'dns:log_center' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 日志内容 -->
+<div class="card">
+    <div class="card-body p-0" style="min-height:400px;">
+        {% if logs %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 font-monospace" style="font-size:12px;">
+                <thead class="table-light sticky-top">
+                    <tr><th width="40">#</th><th width="140">时间</th><th width="80">类别</th><th>操作</th><th>对象</th><th width="50">结果</th><th width="70">操作人</th><th>详情</th></tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="{% if log.result == 'failed' %}table-danger{% endif %}">
+                        <td>{{ forloop.counter }}</td>
+                        <td style="white-space:nowrap">{{ log.operation_time|date:'m-d H:i:s' }}</td>
+                        <td><span class="badge bg-{% if log.category == 'zone' %}primary{% elif log.category == 'record' %}success{% elif log.category == 'acl' or log.category == 'view' %}info{% elif log.category == 'service' %}warning text-dark{% elif log.category == 'publish' %}success{% elif log.category == 'backup' %}dark{% else %}light text-dark{% endif %}">{{ log.category|default:'--' }}</span></td>
+                        <td><code>{{ log.action }}</code></td>
+                        <td class="text-truncate" style="max-width:120px;" title="{{ log.object_name }}">{{ log.object_name|truncatechars:20|default:'--' }}</td>
+                        <td>{% if log.result == 'success' %}<i class="bi bi-check-circle-fill text-success"></i>{% elif log.result == 'failed' %}<i class="bi bi-x-circle-fill text-danger"></i>{% else %}<i class="bi bi-hourglass-split text-warning"></i>{% endif %}</td>
+                        <td class="small">{{ log.user.username|default:'--'|truncatechars:6 }}</td>
+                        <td class="text-truncate text-muted" style="max-width:220px;">{{ log.detail|truncatechars:60|default:'--' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center py-3 text-muted">暂无审计日志数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-journal-x fs-1 opacity-25 d-block mb-2"></i>
+            <p>暂无审计日志数据</p>
+            <p class="small">DNS操作（增删改查、发布、回滚等）的记录将显示在此处</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

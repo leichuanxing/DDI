@@ -57,11 +57,11 @@
         <div class="card stat-card h-100">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-warning bg-opacity-10 text-warning me-3">
-                    <i class="bi bi-globe"></i>
+                    <i class="bi bi-hdd-stack"></i>
                 </div>
                 <div>
-                    <div class="stat-value text-warning">{{ stats.dns_record_count }}</div>
-                    <div class="stat-label">DNS记录</div>
+                    <div class="stat-value text-warning">{{ stats.device_count }}</div>
+                    <div class="stat-label">设备总数</div>
                 </div>
             </div>
         </div>
@@ -97,25 +97,7 @@
         </div>
     </div>
     
-    <div class="col-md-4 col-lg-2">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center">
-                <div class="stat-value" style="color: #17a2b8; font-size: 24px;">{{ stats.dhcp_pool_count }}</div>
-                <div class="stat-label">DHCP池</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 col-lg-2">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center">
-                <div class="stat-value" style="color: #6610f2; font-size: 24px;">{{ stats.dhcp_active_lease }}</div>
-                <div class="stat-label">活跃租约</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 col-lg-2">
+    <div class="col-md-4 col-lg-3">
         <div class="card stat-card h-100">
             <div class="card-body text-center">
                 <div class="stat-value" style="color: #6c757d; font-size: 24px;">{{ stats.device_count }}</div>
@@ -154,20 +136,8 @@
 
 <!-- 第三行图表 -->
 <div class="row g-3 mb-4">
-    <!-- DNS记录分布 -->
-    <div class="col-md-5 col-lg-4">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-header bg-transparent py-2 px-3 small fw-bold text-muted d-flex align-items-center gap-1">
-                <i class="bi bi-diagram-2" style="font-size: 13px;"></i> DNS记录类型分布
-            </div>
-            <div class="card-body d-flex justify-content-center align-items-center p-2" style="height: 200px;">
-                <canvas id="dnsChart"></canvas>
-            </div>
-        </div>
-    </div>
-
     <!-- VLAN分布 -->
-    <div class="col-md-7 col-lg-8">
+    <div class="col-md-12 col-lg-12">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-header bg-transparent py-2 px-3 small fw-bold text-muted d-flex align-items-center gap-1">
                 <i class="bi bi-diagram-3" style="font-size: 13px;"></i> VLAN地址分布
@@ -325,33 +295,6 @@ new Chart(subnetCtx, {
         plugins: {
             legend: { position: 'top', labels: { padding: 12, usePointStyle: true, pointStyleWidth: 8, font: { size: 11 } } },
             tooltip: { bodyFont: { size: 12 }, titleFont: { size: 11 } }
-        }
-    }
-});
-
-// DNS记录分布图
-const dnsCtx = document.getElementById('dnsChart').getContext('2d');
-new Chart(dnsCtx, {
-    type: 'pie',
-    data: {
-        labels: [{% for k, v in dns_types.items %}'{{ k }}'{% if not forloop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            data: [{% for k, v in dns_types.items %}{{ v }}{% if not forloop.last %},{% endif %}{% endfor %}],
-            backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8', '#fd7e14'],
-            borderWidth: 2,
-            borderColor: '#fff',
-            hoverOffset: 6,
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                position: 'right',
-                labels: { padding: 10, usePointStyle: true, pointStyleWidth: 8, font: { size: 11 } }
-            },
-            tooltip: { bodyFont: { size: 12 }, titleFont: { size: 12 } }
         }
     }
 });

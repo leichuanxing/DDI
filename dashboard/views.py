@@ -7,8 +7,6 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from ipam.models import Region, Subnet, IPAddress
-from dnsmgr.models import DNSZone, DNSRecord
-from dhcpmgr.models import DHCPPool, DHCPLease
 from devices.models import Device
 from logs.models import OperationLog
 
@@ -28,13 +26,6 @@ def index(request):
         'ip_reserved': IPAddress.objects.filter(status='reserved').count(),    # 保留
         'ip_conflict': IPAddress.objects.filter(status='conflict').count(),    # 冲突
         
-        # DNS 统计 - 区域数/记录数
-        'dns_zone_count': DNSZone.objects.count(),
-        'dns_record_count': DNSRecord.objects.count(),
-        
-        # DHCP 统计 - 启用的地址池数/活跃租约数
-        'dhcp_pool_count': DHCPPool.objects.filter(status='enabled').count(),
-        'dhcp_active_lease': DHCPLease.objects.filter(status='active').count(),
         
         # 设备统计
         'device_count': Device.objects.count(),
@@ -75,13 +66,6 @@ def index(request):
             'count': item['ip_count'],
         })
     
-    # ========== DNS记录类型分布（用于饼图）==========
-    dns_type_stats = DNSRecord.objects.values('record_type').annotate(
-        count=Count('id')
-    ).order_by('-count')
-    
-    dns_types = {item['record_type']: item['count'] for item in dns_type_stats}
-    
     # ========== 最近操作记录（最多展示15条）==========
     recent_logs = OperationLog.objects.select_related('user')[:15]
     
@@ -110,7 +94,6 @@ def index(request):
         'stats': stats,
         'subnet_stats': subnet_stats,
         'vlan_data': vlan_data,
-        'dns_types': dns_types,
         'recent_logs': recent_logs,
         # 最多展示5条告警
         'alerts': alerts[:5],
