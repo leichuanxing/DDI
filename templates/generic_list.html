@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+{% include "components/page_header.html" %}
+
+<form class="card search-panel" method="get">
+  <div class="field">
+    <label for="q">关键词</label>
+    <input id="q" name="q" value="{{ request.GET.q }}" placeholder="搜索名称、IP、主机名、MAC 或内容">
+  </div>
+  <div class="field">
+    <label for="status">状态</label>
+    <select id="status" name="status">
+      <option value="">全部状态</option>
+      <option value="enabled">启用</option>
+      <option value="disabled">停用 / 禁用</option>
+      <option value="success">成功</option>
+      <option value="failed">失败</option>
+      <option value="running">执行中</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="type">类型</label>
+    <select id="type" name="type">
+      <option value="">全部类型</option>
+      <option value="A">A</option>
+      <option value="AAAA">AAAA</option>
+      <option value="CNAME">CNAME</option>
+      <option value="MX">MX</option>
+      <option value="TXT">TXT</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="date">时间范围</label>
+    <input id="date" name="date" type="date">
+  </div>
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="{{ request.path }}">重置</a>
+</form>
+
+{% include "components/data_table.html" %}
+{% endblock %}

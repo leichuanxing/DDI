@@ -1,12 +1,13 @@
-# DDI管理系统依赖包
-
-# === 核心框架 ===
-Django>=4.2,<6.0
-gunicorn>=21.0.0
-
-# === 网络扫描与SSH连接 ===
-paramiko>=3.0.0          # SSH登录交换机获取ARP信息
-dnspython>=2.6.0         # DNS解析操作
-
-# === 图片处理 ===
-Pillow>=10.0.0           # 设备图片等图片处理
+Django>=5.0,<5.3
+djangorestframework>=3.15,<3.17
+djangorestframework-simplejwt>=5.3,<6.0
+django-filter>=24.2
+PyMySQL>=1.1
+celery>=5.4
+redis>=5.0
+requests>=2.32
+cryptography>=42.0
+gunicorn>=22.0
+openpyxl>=3.1
+python-dotenv>=1.0
+whitenoise>=6.7

@@ -1,199 +1,101 @@
-{% extends 'base.html' %}
-
-{% block title %}DNS服务管理{% endblock %}
+{% extends "base.html" %}
 
 {% block content %}
-{% csrf_token %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-router"></i> DNS服务管理</h4>
+{% include "components/page_header.html" with page_title=page_title page_description=page_description primary_action="" show_import_export=False %}
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div>
+      <div class="label">PowerDNS API</div>
+      <div class="value" style="font-size:22px">{{ config.api_port }}</div>
+      <div class="trend">{{ config.api_url }}</div>
+    </div>
+    <div class="stat-icon">API</div>
+  </div>
+  <div class="stat-card stat-green">
+    <div>
+      <div class="label">连通状态</div>
+      <div class="value" style="font-size:22px">{{ health_label }}</div>
+      <div class="trend">{{ health.error_message|default:"PowerDNS Authoritative" }}</div>
+    </div>
+    <div class="stat-icon">S</div>
+  </div>
+  <div class="stat-card stat-cyan">
+    <div>
+      <div class="label">递归查询</div>
+      <div class="value" style="font-size:22px">{% if recursion.enabled %}启用{% else %}关闭{% endif %}</div>
+      <div class="trend">公网域名转发解析</div>
+    </div>
+    <div class="stat-icon">R</div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div>
+      <div class="label">权威区域</div>
+      <div class="value" style="font-size:22px">{{ recursion.forward_zones|default:"-" }}</div>
+      <div class="trend">转发至本机 PowerDNS</div>
+    </div>
+    <div class="stat-icon">Z</div>
+  </div>
 </div>
 
-<!-- 服务器信息 -->
-<div class="row g-3 mb-4">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header py-2">服务状态信息</div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-4"><label class="text-muted small">主机名</label><div class="fw-semibold">{{ server.hostname }}</div></div>
-                    <div class="col-md-4"><label class="text-muted small">管理IP</label><div class="fw-semibold">{{ server.ip_address|default:'127.0.0.1' }}</div></div>
-                    <div class="col-md-4"><label class="text-muted small">BIND版本</label><div class="fw-semibold">{{ server.bind_version|default:'检测中...' }}</div></div>
-                    <div class="col-md-6"><label class="text-muted small">配置文件路径</label><div class="font-monospace small">{{ server.named_conf_path }}</div></div>
-                    <div class="col-md-6"><label class="text-muted small">Zone目录</label><div class="font-monospace small">{{ server.zone_dir }}</div></div>
-                    <div class="col-md-6"><label class="text-muted small">日志文件</label><div class="font-monospace small">{{ server.log_file }}</div></div>
-                    <div class="col-md-6"><label class="text-muted small">监控状态</label><div>{% if server.enabled %}<span class="badge bg-success">已启用</span>{% else %}<span class="badge bg-secondary">未启用</span>{% endif %}</div></div>
-                </div>
-            </div>
-        </div>
+<div class="dashboard-grid">
+  <section class="card form-card">
+    <div class="card-header">
+      <h2>递归查询配置</h2>
+      <span class="status-badge {% if recursion.enabled %}status-enabled{% else %}status-disabled{% endif %}">
+        {% if recursion.enabled %}已启用{% else %}已关闭{% endif %}
+      </span>
     </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header py-2">运行状态</div>
-            <div class="card-body text-center py-4">
-                <div id="service-status-badge" class="mb-3">
-                    {% if service_info.is_running %}
-                    <i class="bi bi-circle-fill text-success fs-1"></i>
-                    <div class="mt-2 fw-bold text-success">运行中</div>
-                    {% elif service_info.error %}
-                    <i class="bi bi-circle-fill text-danger fs-1"></i>
-                    <div class="mt-2 fw-bold text-danger">异常</div>
-                    {% else %}
-                    <i class="bi bi-circle-fill text-secondary fs-1"></i>
-                    <div class="mt-2 fw-bold text-secondary">已停止</div>
-                    {% endif %}
-                </div>
-                <div class="small text-muted">
-                    PID: {{ service_info.pid|default:'--' }} | 运行时间: {{ service_info.uptime|default:'--' }}<br>
-                    BIND版本: {{ service_info.bind_version|default:'--' }}<br>
-                    监听端口: TCP/UDP 53
-                </div>
-            </div>
+    <form method="post">
+      {% csrf_token %}
+      <div class="card-body">
+        <div class="field">
+          <label>启用递归查询</label>
+          <label style="display:flex;align-items:center;min-height:36px;font-weight:500">
+            <input type="checkbox" name="enabled" {% if recursion.enabled %}checked{% endif %}>
+            允许解析公网域名
+          </label>
         </div>
+        <div class="field">
+          <label class="required" for="forward_zones">权威域名区域</label>
+          <input id="forward_zones" name="forward_zones" value="{{ recursion.forward_zones }}" placeholder="devnets.net">
+          <span class="help-text">多个区域可用逗号分隔，例如 devnets.net,example.internal</span>
+        </div>
+        <div class="field">
+          <label class="required" for="upstream_dns_1">上游 DNS 1</label>
+          <input id="upstream_dns_1" name="upstream_dns_1" value="{{ recursion.upstream_dns_1 }}" placeholder="223.5.5.5">
+        </div>
+        <div class="field">
+          <label for="upstream_dns_2">上游 DNS 2</label>
+          <input id="upstream_dns_2" name="upstream_dns_2" value="{{ recursion.upstream_dns_2 }}" placeholder="119.29.29.29">
+        </div>
+      </div>
+      <div class="form-footer">
+        <a class="btn btn-soft" href="/ui/dns/sync/">DNS 数据同步</a>
+        <button class="btn btn-primary" type="submit">保存递归配置</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card table-card">
+    <div class="card-header">
+      <h2>PowerDNS API 配置</h2>
+      <a class="btn btn-soft btn-sm" href="/ui/dns/service/{{ config.pk }}/edit/">编辑 API</a>
     </div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <tbody>
+          <tr><th>关联容器</th><td>{{ config.api_url }}</td></tr>
+          <tr><th>API 端口</th><td>{{ config.api_port }}</td></tr>
+          <tr><th>Server ID</th><td>{{ config.server_id }}</td></tr>
+          <tr><th>SSL</th><td>{% if config.use_ssl %}启用{% else %}关闭{% endif %}</td></tr>
+          <tr><th>健康检查</th><td>{% if config.health_check_enabled %}启用{% else %}关闭{% endif %}</td></tr>
+          <tr><th>响应耗时</th><td>{{ health.response_time_ms|default:"-" }} ms</td></tr>
+          <tr><th>错误信息</th><td>{{ health.error_message|default:"-" }}</td></tr>
+          <tr><th>运行配置</th><td>{{ runtime_path }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
-
-<!-- 操作面板 -->
-<div class="row g-3 mb-4">
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header py-2"><i class="bi bi-gear me-1"></i>服务控制</div>
-            <div class="card-body">
-                <div class="row g-2">
-                    <div class="col-auto">
-                        <button class="btn btn-success btn-sm" onclick="doAction('start')"><i class="bi bi-play-fill"></i> 启动</button>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-danger btn-sm" onclick="doAction('stop', true)"><i class="bi bi-stop-fill"></i> 停止</button>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-warning btn-sm" onclick="doAction('restart', true)"><i class="bi bi-arrow-clockwise"></i> 重启</button>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-primary btn-sm" onclick="doAction('reload')"><i class="bi bi-arrow-repeat"></i> Reload</button>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-info btn-sm" onclick="doAction('reconfig')"><i class="bi bi-arrow-counterclockwise"></i> Reconfig</button>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-secondary btn-sm" onclick="doAction('flush_cache', true)"><i class="bi bi-trash"></i> 清理缓存</button>
-                    </div>
-                </div>
-                <div id="action-result" class="mt-3 small"></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header py-2"><i class="bi bi-terminal me-1"></i>rndc 状态</div>
-            <div class="card-body font-monospace small" style="max-height:150px;overflow-y:auto;">
-                <pre id="rndc-status" class="mb-0 text-secondary">// 点击下方按钮获取rndc status...</pre>
-            </div>
-            <div class="card-footer">
-                <button class="btn btn-sm btn-outline-primary" onclick="doAction('status')">刷新状态</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 最近操作记录 -->
-<div class="card">
-    <div class="card-header py-2"><i class="bi bi-clock-history me-1"></i>最近操作记录</div>
-    <div class="card-body p-0">
-        {% if recent_operations %}
-        <table class="table table-sm table-hover mb-0">
-            <thead class="table-light"><tr><th>#</th><th>操作</th><th>对象</th><th>结果</th><th>操作人</th><th>时间</th></tr></thead>
-            <tbody>
-                {% for op in recent_operations %}
-                <tr>
-                    <td>{{ forloop.counter }}</td>
-                    <td><code>{{ op.action }}</code></td>
-                    <td>{{ op.object_name|truncatechars:30 }}</td>
-                    <td>{% if op.result == 'success' %}<span class="badge bg-success">成功</span>{% else %}<span class="badge bg-danger">失败</span>{% endif %}</td>
-                    <td>{{ op.user|default:'-' }}</td>
-                    <td style="white-space:nowrap;font-size:12px;">{{ op.operation_time|date:'m-d H:i:s' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="p-3 text-center text-muted small">暂无操作记录</div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- 确认弹窗 -->
-<div class="modal fade" id="confirmModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h6 class="modal-title"><i class="bi bi-exclamation-triangle me-1"></i>危险操作确认</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p id="confirm-msg">确定要执行此操作吗？此操作可能影响DNS解析服务！</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-warning btn-sm" id="confirm-btn">确认执行</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% block extra_js %}
-<script>
-/* DNS服务控制 - 使用隐藏表单POST，避免代理层拦截AJAX响应 */
-let pendingAction = '';
-
-function doAction(action, needConfirm) {
-    if (needConfirm) {
-        pendingAction = action;
-        const names = {start:'启动', stop:'停止', restart:'重启', reload:'Reload', reconfig:'Reconfig', flush_cache:'清理缓存', status:'刷新状态'};
-        document.getElementById('confirm-msg').textContent = '确定要' + (names[action] || action) + ' DNS服务吗？';
-        new bootstrap.Modal(document.getElementById('confirmModal')).show();
-        return;
-    }
-    submitAction(action);
-}
-
-document.getElementById('confirm-btn').addEventListener('click', function() {
-    bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
-    submitAction(pendingAction);
-});
-
-function submitAction(action) {
-    const resultDiv = document.getElementById('action-result');
-    resultDiv.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> 正在执行 ' + action + ' ...</span>';
-
-    /* 获取CSRF token */
-    const csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
-    if (!csrfEl) { resultDiv.innerHTML = '<span class="text-danger">错误：未找到CSRF token</span>'; return; }
-
-    /* 创建隐藏表单并提交（绕过代理对fetch的拦截） */
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{% url "dns:api_service_action" %}';
-    form.style.display = 'none';
-
-    var csrfInput = document.createElement('input');
-    csrfInput.type = 'hidden'; csrfInput.name = 'csrfmiddlewaretoken'; csrfInput.value = csrfEl.value;
-    form.appendChild(csrfInput);
-
-    var actionInput = document.createElement('input');
-    actionInput.type = 'hidden'; actionInput.name = 'action'; actionInput.value = action;
-    form.appendChild(actionInput);
-
-    document.body.appendChild(form);
-
-    /* 表单提交后通过定时器刷新页面获取最新状态 */
-    form.submit();
-    resultDiv.innerHTML = '<span class="text-info"><i class="bi bi-arrow-repeat spin"></i> 操作已提交，页面即将刷新...</span>';
-    setTimeout(function() { location.reload(); }, 1500);
-}
-</script>
-<style>
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-</style>
-{% endblock %}
 {% endblock %}

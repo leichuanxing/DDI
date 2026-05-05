@@ -1,82 +1,85 @@
-"""
-账户管理模块 - 数据模型
-定义用户、角色、登录日志等核心数据结构
-支持四角色RBAC权限体系：系统管理员/网络管理员/运维人员/审计用户
-"""
-
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
-class Role(models.Model):
-    """角色表 - 系统预置四种角色，与RBAC权限体系对应"""
-    ROLE_CHOICES = (
-        ('admin', '系统管理员'),
-        ('network_admin', '网络管理员'),
-        ('operator', '运维人员'),
-        ('auditor', '审计用户'),
-    )
-    
-    name = models.CharField('角色名称', max_length=50, unique=True)
-    code = models.CharField('角色编码', max_length=50, choices=ROLE_CHOICES, unique=True)
+class Permission(models.Model):
+    module = models.CharField('模块', max_length=64)
+    action = models.CharField('动作', max_length=64)
+    code = models.CharField('权限编码', max_length=128, unique=True)
     description = models.TextField('描述', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
-    
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '权限'
+        verbose_name_plural = '权限'
+        ordering = ['module', 'action']
+
+    def __str__(self):
+        return self.code
+
+
+class Role(models.Model):
+    name = models.CharField('角色名称', max_length=64, unique=True)
+    code = models.CharField('角色编码', max_length=64, unique=True)
+    description = models.TextField('描述', blank=True)
+    permissions = models.ManyToManyField(Permission, through='RolePermission', related_name='roles', verbose_name='权限')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
     class Meta:
         verbose_name = '角色'
-        verbose_name_plural = verbose_name
-    
+        verbose_name_plural = '角色'
+        ordering = ['name']
+
     def __str__(self):
         return self.name
 
 
 class User(AbstractUser):
-    """扩展用户表 - 继承Django内置用户模型，增加角色、部门、手机号等业务字段"""
-    
-    ROLE_CHOICES = (
-        ('admin', '系统管理员'),
-        ('network_admin', '网络管理员'),
-        ('operator', '运维人员'),
-        ('auditor', '审计用户'),
-    )
-    
-    role = models.ForeignKey(Role, on_delete=models.PROTECT, null=True, blank=True, verbose_name='角色')  # PROTECT: 角色被引用时禁止删除
-    real_name = models.CharField('姓名', max_length=50, blank=True)
-    phone = models.CharField('手机号', max_length=20, blank=True)
-    department = models.CharField('部门', max_length=100, blank=True)
-    is_active = models.BooleanField('状态', default=True)  # 禁用用户时设为False，阻止登录
+    real_name = models.CharField('真实姓名', max_length=64, blank=True)
+    mobile = models.CharField('手机号', max_length=32, blank=True)
+    roles = models.ManyToManyField(Role, through='UserRole', related_name='users', verbose_name='角色')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
-    last_login_ip = models.GenericIPAddressField('最后登录IP', blank=True, null=True)  # 登录时自动更新
-    
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
     class Meta:
         verbose_name = '用户'
-        verbose_name_plural = verbose_name
-        ordering = ['-date_joined']
-    
-    def __str__(self):
-        return f"{self.username} ({self.get_role_display()})"
-    
-    def get_role_display(self):
-        """获取角色显示名称，未分配角色时返回'未分配'"""
-        if self.role:
-            return self.role.name
-        return '未分配'
+        verbose_name_plural = '用户'
+
+
+class UserRole(models.Model):
+    user = models.ForeignKey(User, verbose_name='用户', on_delete=models.CASCADE)
+    role = models.ForeignKey(Role, verbose_name='角色', on_delete=models.CASCADE)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '用户角色'
+        verbose_name_plural = '用户角色'
+        unique_together = ('user', 'role')
+
+
+class RolePermission(models.Model):
+    role = models.ForeignKey(Role, verbose_name='角色', on_delete=models.CASCADE)
+    permission = models.ForeignKey(Permission, verbose_name='权限', on_delete=models.CASCADE)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '角色权限'
+        verbose_name_plural = '角色权限'
+        unique_together = ('role', 'permission')
 
 
 class LoginLog(models.Model):
-    """登录日志 - 记录每次登录/登出操作，支持登录审计"""
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='用户')  # 用户删除后保留日志
-    username = models.CharField('用户名', max_length=150)  # 冗余存储，防止用户删除后丢失
-    ip_address = models.GenericIPAddressField('登录IP')
-    user_agent = models.TextField('用户代理', blank=True)
-    status = models.CharField('结果', max_length=20, default='success')  # success/failed
-    message = models.CharField('消息', max_length=255, blank=True)
-    login_time = models.DateTimeField('登录时间', auto_now_add=True)
-    
+    username = models.CharField('用户名', max_length=150)
+    user = models.ForeignKey(User, verbose_name='用户', null=True, blank=True, on_delete=models.SET_NULL)
+    request_ip = models.GenericIPAddressField('请求IP', null=True, blank=True)
+    user_agent = models.TextField('User Agent', blank=True)
+    result = models.CharField('结果', max_length=16, default='success')
+    error_message = models.TextField('错误信息', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
     class Meta:
         verbose_name = '登录日志'
-        verbose_name_plural = verbose_name
-        ordering = ['-login_time']
-    
-    def __str__(self):
-        return f"{self.username} - {self.login_time}"
+        verbose_name_plural = '登录日志'
+        ordering = ['-created_at']

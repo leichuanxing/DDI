@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}DHCP 配置下发{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>DHCP 配置下发</h1>
+    <p>基于当前 DHCP 子网、地址池、保留地址和 Option 生成 Kea DHCP4 配置，并通过任务中心下发。</p>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-ghost" type="button" data-action-url="/api/dhcp/config-test/" data-action-method="POST" data-action-success="配置测试任务已创建">配置测试</button>
+    <button class="btn btn-primary" type="button" data-action-url="/api/dhcp/config-set/" data-action-method="POST" data-action-success="配置下发任务已创建">下发配置</button>
+    <button class="btn btn-soft" type="button" data-action-url="/api/dhcp/config-reload/" data-action-method="POST" data-action-success="配置重载任务已创建">重载服务</button>
+  </div>
+</div>
+
+<section class="stat-grid">
+  <article class="stat-card">
+    <div>
+      <div class="label">启用 DHCP 子网</div>
+      <div class="value">{{ summary.enabled_subnets }}</div>
+      <div class="trend">已下发 {{ summary.deployed_subnets }} 个，待下发 {{ summary.pending_subnets }} 个</div>
+    </div>
+    <div class="stat-icon">S</div>
+  </article>
+  <article class="stat-card stat-orange">
+    <div>
+      <div class="label">启用地址池</div>
+      <div class="value">{{ summary.enabled_pools }}</div>
+      <div class="trend">pool_start - pool_end</div>
+    </div>
+    <div class="stat-icon">P</div>
+  </article>
+  <article class="stat-card stat-green">
+    <div>
+      <div class="label">启用保留地址</div>
+      <div class="value">{{ summary.enabled_reservations }}</div>
+      <div class="trend">固定分配 reservations{% if summary.invalid_reservations %}，跳过 {{ summary.invalid_reservations }} 条无标识记录{% endif %}</div>
+    </div>
+    <div class="stat-icon">R</div>
+  </article>
+  <article class="stat-card stat-purple">
+    <div>
+      <div class="label">DHCP Option</div>
+      <div class="value">{{ summary.options }}</div>
+      <div class="trend">全局 / 子网作用域</div>
+    </div>
+    <div class="stat-icon">O</div>
+  </article>
+</section>
+
+<section class="dashboard-grid">
+  <div class="card table-card">
+    <div class="card-header"><h2>子网下发状态</h2><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'dhcp' 'subnets' %}">管理子网</a></div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead><tr><th>子网</th><th>子网 ID</th><th>Relay 地址</th><th>网关</th><th>DNS Server</th><th>地址池</th><th>保留地址</th><th>下发状态</th><th>说明</th></tr></thead>
+        <tbody>
+          {% for row in subnet_rows %}
+          <tr>
+            <td>{{ row.subnet.subnet }}</td>
+            <td>{{ row.subnet.subnet_id }}</td>
+            <td>{{ row.subnet.relay_ip|default:"-" }}</td>
+            <td>{{ row.subnet.gateway|default:"-" }}</td>
+            <td class="truncate">{{ row.subnet.dns_servers|default:"-" }}</td>
+            <td>{{ row.pool_count }}</td>
+            <td>{{ row.reservation_count }}</td>
+            <td>{% include "components/status_badge.html" with status=row.deploy_status label=row.deploy_label %}</td>
+            <td class="truncate">{{ row.deploy_detail }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9">{% include "components/empty_state.html" with empty_title="暂无 DHCP 子网" empty_text="请先创建并启用 DHCP 子网，再执行配置下发。" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <div class="card-header"><h2>最近下发任务</h2><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'tasks' 'list' %}">任务中心</a></div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead><tr><th>任务类型</th><th>目标服务</th><th>状态</th><th>创建时间</th><th>完成时间</th><th>错误信息</th></tr></thead>
+        <tbody>
+          {% for task in tasks %}
+          <tr>
+            <td>{{ task.task_type }}</td>
+            <td>{{ task.target_service }}</td>
+            <td>{% include "components/status_badge.html" with status=task.status label=task.get_status_display %}</td>
+            <td>{{ task.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ task.finished_at|date:"Y-m-d H:i"|default:"-" }}</td>
+            <td class="truncate">{{ task.error_message|default:"-" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">{% include "components/empty_state.html" with empty_title="暂无下发任务" empty_text="点击上方按钮后，会在这里展示配置测试、下发和重载任务。" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

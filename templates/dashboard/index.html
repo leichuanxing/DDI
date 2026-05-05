@@ -1,331 +1,126 @@
-{% extends 'base.html' %}
-
-{% block title %}首页仪表盘{% endblock %}
-
+{% extends "base.html" %}
+{% block title %}系统仪表盘{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-speedometer2"></i> 首页仪表盘</h4>
-    <span class="text-muted">系统运行状态总览</span>
-</div>
+{% include "components/page_header.html" %}
 
-<!-- 统计卡片 -->
-<div class="row g-3 mb-4">
-    <!-- IPAM 统计 -->
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-primary bg-opacity-10 text-primary me-3">
-                    <i class="bi bi-pci-network"></i>
-                </div>
-                <div>
-                    <div class="stat-value text-primary">{{ stats.ip_total }}</div>
-                    <div class="stat-label">IP地址总数</div>
-                </div>
-            </div>
-        </div>
+<section class="stat-grid">
+  {% for item in stat_cards %}
+  <article class="stat-card {{ item.color }}">
+    <div>
+      <div class="label">{{ item.label }}</div>
+      <div class="value">{{ item.value }}</div>
+      <div class="trend">{{ item.trend }}</div>
     </div>
-    
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-success bg-opacity-10 text-success me-3">
-                    <i class="bi bi-check-circle"></i>
-                </div>
-                <div>
-                    <div class="stat-value text-success">{{ stats.ip_allocated }}</div>
-                    <div class="stat-label">已分配IP</div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div class="stat-icon">{{ item.icon }}</div>
+  </article>
+  {% endfor %}
+</section>
 
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-info bg-opacity-10 text-info me-3">
-                    <i class="bi bi-hdd-stack"></i>
-                </div>
-                <div>
-                    <div class="stat-value text-info">{{ stats.subnet_count }}</div>
-                    <div class="stat-label">子网总数</div>
-                </div>
-            </div>
-        </div>
+<section class="dashboard-grid">
+  <div class="card">
+    <div class="card-header"><h2>服务状态</h2><button class="btn btn-soft btn-sm" type="button" data-health-check-url="{% url 'check-now' %}">立即检测</button></div>
+    <div class="card-body">
+      <div class="service-list">
+        {% for service in services %}
+        <article class="service-card">
+          <div>
+            <strong>{{ service.service_name }}</strong>
+            <div class="service-meta">{{ service.ip_address|default:"-" }}{% if service.port %}:{{ service.port }}{% endif %} · 最近检测 {{ service.checked_at|date:"Y-m-d H:i"|default:"-" }}</div>
+          </div>
+          <div>
+            {% include "components/status_badge.html" with status=service.status label=service.status_label %}
+            <div class="service-meta">{{ service.response_time_ms|default:"-" }} ms</div>
+          </div>
+        </article>
+        {% empty %}
+        {% include "components/empty_state.html" with empty_title="暂无服务检测数据" empty_text="系统会在健康检查后展示 ddi-web、ddi-mysql、ddi-pdns、ddi-kea 状态。" %}
+        {% endfor %}
+      </div>
     </div>
-    
-    <div class="col-md-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-warning bg-opacity-10 text-warning me-3">
-                    <i class="bi bi-hdd-stack"></i>
-                </div>
-                <div>
-                    <div class="stat-value text-warning">{{ stats.device_count }}</div>
-                    <div class="stat-label">设备总数</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+  </div>
+  <div class="card chart-box">
+    <div class="card-header"><h2>各网段地址利用率</h2></div>
+    <div class="card-body"><canvas id="subnetUsageChart"></canvas></div>
+  </div>
+</section>
 
-<!-- 第二行统计 -->
-<div class="row g-3 mb-4">
-    <div class="col-md-4 col-lg-2">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center">
-                <div class="stat-value" style="color: #28a745; font-size: 24px;">{{ stats.ip_available }}</div>
-                <div class="stat-label">空闲IP</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 col-lg-2">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center">
-                <div class="stat-value" style="color: #fd7e14; font-size: 24px;">{{ stats.ip_reserved }}</div>
-                <div class="stat-label">保留IP</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 col-lg-2">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center">
-                <div class="stat-value" style="color: #dc3545; font-size: 24px;">{{ stats.ip_conflict }}</div>
-                <div class="stat-label">冲突IP</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 col-lg-3">
-        <div class="card stat-card h-100">
-            <div class="card-body text-center">
-                <div class="stat-value" style="color: #6c757d; font-size: 24px;">{{ stats.device_count }}</div>
-                <div class="stat-label">设备数</div>
-            </div>
-        </div>
-    </div>
-</div>
+<section class="chart-grid">
+  <div class="card chart-box">
+    <div class="card-header"><h2>IP 状态分布</h2></div>
+    <div class="card-body"><canvas id="ipStatusChart"></canvas></div>
+  </div>
+  <div class="card chart-box">
+    <div class="card-header"><h2>最近 7 天租约变化</h2></div>
+    <div class="card-body"><canvas id="leaseTrendChart"></canvas></div>
+  </div>
+</section>
 
-<!-- 图表区域 -->
-<div class="row g-3 mb-4">
-    <!-- IP使用率 -->
-    <div class="col-md-5 col-lg-4">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-header bg-transparent py-2 px-3 small fw-bold text-muted d-flex align-items-center gap-1">
-                <i class="bi bi-pie-chart" style="font-size: 13px;"></i> IP使用率
-            </div>
-            <div class="card-body d-flex justify-content-center align-items-center p-2" style="height: 200px;">
-                <canvas id="usageChart"></canvas>
-            </div>
-        </div>
+<section class="dashboard-grid">
+  <div class="card table-card">
+    <div class="card-header"><h2>最近任务</h2><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'tasks' 'list' %}">查看全部</a></div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead><tr><th>任务名称</th><th>目标服务</th><th>状态</th><th>开始时间</th><th>完成时间</th><th>操作</th></tr></thead>
+        <tbody>
+          {% for task in recent_tasks %}
+          <tr>
+            <td class="truncate">{{ task.task_type }}</td>
+            <td>{{ task.target_service }}</td>
+            <td>{% include "components/status_badge.html" with status=task.status label=task.status_label %}</td>
+            <td>{{ task.started_at|date:"m-d H:i"|default:"-" }}</td>
+            <td>{{ task.finished_at|date:"m-d H:i"|default:"-" }}</td>
+            <td><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'tasks' 'logs' %}">日志</a></td>
+          </tr>
+          {% empty %}<tr><td colspan="6">{% include "components/empty_state.html" with empty_title="暂无任务" %}</td></tr>{% endfor %}
+        </tbody>
+      </table>
     </div>
-
-    <!-- 子网使用情况 -->
-    <div class="col-md-7 col-lg-8">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-header bg-transparent py-2 px-3 small fw-bold text-muted d-flex align-items-center gap-1">
-                <i class="bi bi-bar-chart" style="font-size: 13px;"></i> 各子网IP使用情况
-            </div>
-            <div class="card-body p-2" style="height: 200px;">
-                <canvas id="subnetChart"></canvas>
-            </div>
-        </div>
+  </div>
+  <div class="card table-card">
+    <div class="card-header"><h2>最近审计日志</h2><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'audit' 'operations' %}">查看全部</a></div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead><tr><th>操作人</th><th>模块</th><th>动作</th><th>对象</th><th>结果</th><th>时间</th></tr></thead>
+        <tbody>
+          {% for log in recent_audit_logs %}
+          <tr>
+            <td>{{ log.username|default:"-" }}</td>
+            <td>{{ log.module }}</td>
+            <td>{{ log.action }}</td>
+            <td class="truncate">{{ log.object_name|default:log.object_type|default:"-" }}</td>
+            <td>{% include "components/status_badge.html" with status=log.result label=log.result %}</td>
+            <td>{{ log.created_at|date:"m-d H:i" }}</td>
+          </tr>
+          {% empty %}<tr><td colspan="6">{% include "components/empty_state.html" with empty_title="暂无审计日志" %}</td></tr>{% endfor %}
+        </tbody>
+      </table>
     </div>
-</div>
-
-<!-- 第三行图表 -->
-<div class="row g-3 mb-4">
-    <!-- VLAN分布 -->
-    <div class="col-md-12 col-lg-12">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-header bg-transparent py-2 px-3 small fw-bold text-muted d-flex align-items-center gap-1">
-                <i class="bi bi-diagram-3" style="font-size: 13px;"></i> VLAN地址分布
-            </div>
-            <div class="card-body p-2" style="height: 200px;">
-                <canvas id="vlanChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 告警信息 + 最近操作 -->
-<div class="row g-4">
-    <!-- 告警 -->
-    <div class="col-lg-4">
-        <div class="card h-100">
-            <div class="card-header d-flex justify-content-between">
-                <span><i class="bi bi-exclamation-triangle"></i> 系统告警</span>
-                {% if alerts %}
-                <span class="badge bg-danger">{{ alerts|length }}</span>
-                {% endif %}
-            </div>
-            <div class="card-body">
-                {% if alerts %}
-                <div class="list-group list-group-flush">
-                    {% for alert in alerts %}
-                    <div class="alert alert-{{ alert.level }} alert-card py-2 px-3 mb-2 small">
-                        {{ alert.message }}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center text-muted py-4">
-                    <i class="bi bi-check-circle fs-1 d-block mb-2 text-success"></i>
-                    <p>暂无告警信息，系统运行正常</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    
-    <!-- 最近操作 -->
-    <div class="col-lg-8">
-        <div class="card h-100">
-            <div class="card-header">
-                <i class="bi bi-clock-history"></i> 最近操作记录
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 small">
-                        <thead class="table-light">
-                            <tr>
-                                <th>时间</th>
-                                <th>操作用户</th>
-                                <th>模块</th>
-                                <th>操作类型</th>
-                                <th>变更内容</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for log in recent_logs %}
-                            <tr>
-                                <td class="text-muted">{{ log.operation_time|date:"m-d H:i:s" }}</td>
-                                <td>{{ log.user.username|default:"-" }}</td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ log.module }}</span>
-                                </td>
-                                <td>{{ log.action }}</td>
-                                <td class="text-truncate" style="max-width: 300px;" title="{{ log.new_value }}">
-                                    {{ log.new_value|truncatechars:50 }}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted py-3">暂无操作记录</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
+  </div>
+</section>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{{ chart_data|json_script:"dashboard-chart-data" }}
 <script>
-// IP使用率饼图
-const usageCtx = document.getElementById('usageChart').getContext('2d');
-new Chart(usageCtx, {
-    type: 'doughnut',
-    data: {
-        labels: ['已分配', '空闲', '保留', '冲突'],
-        datasets: [{
-            data: [{{ stats.ip_allocated }}, {{ stats.ip_available }}, {{ stats.ip_reserved }}, {{ stats.ip_conflict }}],
-            backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545'],
-            borderWidth: 2,
-            borderColor: '#fff',
-            hoverOffset: 6,
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                position: 'bottom',
-                labels: { padding: 8, usePointStyle: true, pointStyleWidth: 8, font: { size: 11 } }
-            },
-            tooltip: {
-                bodyFont: { size: 12 }, titleFont: { size: 12 },
-                callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed}` }
-            }
-        },
-        cutout: '65%',
-    }
-});
-
-// 子网使用柱状图
-const subnetCtx = document.getElementById('subnetChart').getContext('2d');
-new Chart(subnetCtx, {
-    type: 'bar',
-    data: {
-        labels: [{% for s in subnet_stats %}'{{ s.name|truncatewords:2 }}'{% if not forloop.last %},{% endif %}{% endfor %}],
-        datasets: [
-            {
-                label: '已分配',
-                data: [{% for s in subnet_stats %}{{ s.allocated }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                backgroundColor: '#0d6efd',
-                borderRadius: 4,
-                barPercentage: 0.5,
-            },
-            {
-                label: '可用',
-                data: [{% for s in subnet_stats %}{{ s.available }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                backgroundColor: '#198754',
-                borderRadius: 4,
-                barPercentage: 0.5,
-            },
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
-            y: {
-                stacked: true,
-                grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
-                ticks: { font: { size: 11 }, maxTicksLimit: 5 }
-            }
-        },
-        plugins: {
-            legend: { position: 'top', labels: { padding: 12, usePointStyle: true, pointStyleWidth: 8, font: { size: 11 } } },
-            tooltip: { bodyFont: { size: 12 }, titleFont: { size: 11 } }
-        }
-    }
-});
-
-// VLAN分布图
-const vlanCtx = document.getElementById('vlanChart').getContext('2d');
-new Chart(vlanCtx, {
-    type: 'bar',
-    data: {
-        labels: [{% for v in vlan_data %}'VLAN{{ v.vlan_id }}'{% if not forloop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            label: 'IP数量',
-            data: [{% for v in vlan_data %}{{ v.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
-            backgroundColor: ['#4fd1c5'],
-            borderRadius: 4,
-            barPercentage: 0.4,
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        indexAxis: 'y',
-        plugins: {
-            legend: { display: false },
-            tooltip: { bodyFont: { size: 12 }, titleFont: { size: 11 } }
-        },
-        scales: {
-            x: { grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }, ticks: { font: { size: 11 }, maxTicksLimit: 6 } },
-            y: { grid: { display: false }, ticks: { font: { size: 11 } } }
-        }
-    }
-});
+  const chartData = JSON.parse(document.getElementById("dashboard-chart-data").textContent);
+  const grid = { color: "#e5e7eb" };
+  if (window.Chart) {
+    new Chart(document.getElementById("subnetUsageChart"), {
+      type: "bar",
+      data: { labels: chartData.subnet_labels, datasets: [{ label: "利用率", data: chartData.subnet_usage, backgroundColor: "#2563EB", borderRadius: 6 }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100, grid } }, plugins: { legend: { display: false } } }
+    });
+    new Chart(document.getElementById("ipStatusChart"), {
+      type: "doughnut",
+      data: { labels: chartData.status_labels, datasets: [{ data: chartData.status_values, backgroundColor: ["#16A34A","#2563EB","#7C3AED","#0891B2","#EA580C","#6B7280","#DC2626"] }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
+    });
+    new Chart(document.getElementById("leaseTrendChart"), {
+      type: "line",
+      data: { labels: chartData.lease_labels, datasets: [{ label: "租约数", data: chartData.lease_values, borderColor: "#0891B2", backgroundColor: "rgba(8,145,178,.12)", tension: .35, fill: true }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid } }, plugins: { legend: { display: false } } }
+    });
+  }
 </script>
 {% endblock %}

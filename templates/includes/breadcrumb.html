@@ -1,0 +1,5 @@
+<nav class="breadcrumb-bar" aria-label="面包屑">
+  <a href="{% url 'dashboard' %}">首页</a>
+  {% if section_title %}<span>/</span><span>{{ section_title }}</span>{% endif %}
+  {% if page_title %}<span>/</span><strong>{{ page_title }}</strong>{% endif %}
+</nav>

@@ -1,0 +1,19 @@
+<header class="top-header">
+  <button class="icon-btn sidebar-toggle" type="button" data-sidebar-toggle aria-label="折叠菜单" title="折叠菜单">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="header-title">
+    <strong>合力数据DDI 管理平台</strong>
+    <span>IPAM · DNS · DHCP 统一运维控制台</span>
+  </div>
+  <div class="header-actions">
+    <div class="header-user">
+      <div class="avatar">{{ request.user.username|default:"U"|slice:":1"|upper }}</div>
+      <div>
+        <strong>{{ request.user.real_name|default:request.user.username }}</strong>
+        <span>{% if request.user.is_superuser %}系统管理员{% else %}运维用户{% endif %}</span>
+      </div>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="{% url 'web-logout' %}">退出登录</a>
+  </div>
+</header>

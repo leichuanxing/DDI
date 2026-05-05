@@ -1,0 +1,78 @@
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <div class="brand-mark">D</div>
+    <div class="brand-text">
+      <strong>DDI Console</strong>
+      <span>企业网络资源管理</span>
+    </div>
+  </div>
+  <nav class="side-nav">
+    <a class="side-link {% if active_menu == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}" title="系统仪表盘"><i>⌂</i><span>首页</span></a>
+
+    <div class="side-group {% if active_section == 'ipam' %}open{% endif %}">
+      <button class="side-group-title" type="button"><i>▦</i><span>IPAM 管理</span><b>⌄</b></button>
+      <div class="side-sub">
+        <a class="{% if active_section == 'ipam' and active_menu == 'address-spaces' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'address-spaces' %}">地址空间</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'subnets' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'subnets' %}">网段管理</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'ip-addresses' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'ip-addresses' %}">IP 地址管理</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'utilization' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'utilization' %}">地址利用率</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'histories' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'histories' %}">IP 使用历史</a>
+      </div>
+    </div>
+
+    <div class="side-group {% if active_section == 'dns' %}open{% endif %}">
+      <button class="side-group-title" type="button"><i>◉</i><span>DNS 管理</span><b>⌄</b></button>
+      <div class="side-sub">
+        <a class="{% if active_section == 'dns' and active_menu == 'service' %}active{% endif %}" href="{% url 'dns-service-page' %}">DNS 服务配置</a>
+        <a class="{% if active_section == 'dns' and active_menu == 'zones' %}active{% endif %}" href="{% url 'web-list' 'dns' 'zones' %}">Zone 管理</a>
+        <a class="{% if active_section == 'dns' and active_menu == 'records' %}active{% endif %}" href="{% url 'web-list' 'dns' 'records' %}">记录管理</a>
+        <a class="{% if active_section == 'dns' and active_menu == 'sync' %}active{% endif %}" href="{% url 'web-list' 'dns' 'sync' %}">DNS 数据同步</a>
+        <a class="{% if active_section == 'dns' and active_menu == 'change-logs' %}active{% endif %}" href="{% url 'web-list' 'dns' 'change-logs' %}">DNS 变更日志</a>
+      </div>
+    </div>
+
+    <div class="side-group {% if active_section == 'dhcp' %}open{% endif %}">
+      <button class="side-group-title" type="button"><i>⇄</i><span>DHCP 管理</span><b>⌄</b></button>
+      <div class="side-sub">
+        <a href="{% url 'web-list' 'dhcp' 'service' %}">Kea 服务配置</a>
+        <a class="{% if active_section == 'dhcp' and active_menu == 'subnets' %}active{% endif %}" href="{% url 'web-list' 'dhcp' 'subnets' %}">DHCP 子网</a>
+        <a class="{% if active_section == 'dhcp' and active_menu == 'pools' %}active{% endif %}" href="{% url 'web-list' 'dhcp' 'pools' %}">地址池管理</a>
+        <a class="{% if active_section == 'dhcp' and active_menu == 'reservations' %}active{% endif %}" href="{% url 'web-list' 'dhcp' 'reservations' %}">保留地址</a>
+        <a class="{% if active_section == 'dhcp' and active_menu == 'options' %}active{% endif %}" href="{% url 'web-list' 'dhcp' 'options' %}">DHCP Option</a>
+        <a class="{% if active_section == 'dhcp' and active_menu == 'leases' %}active{% endif %}" href="{% url 'web-list' 'dhcp' 'leases' %}">当前租约</a>
+        <a class="{% if active_section == 'dhcp' and active_menu == 'lease-history' %}active{% endif %}" href="{% url 'web-list' 'dhcp' 'lease-history' %}">租约历史</a>
+        <a class="{% if active_section == 'dhcp' and active_menu == 'deploy' %}active{% endif %}" href="{% url 'web-list' 'dhcp' 'deploy' %}">DHCP 配置下发</a>
+      </div>
+    </div>
+
+    <div class="side-group {% if active_section == 'tasks' %}open{% endif %}">
+      <button class="side-group-title" type="button"><i>✓</i><span>任务中心</span><b>⌄</b></button>
+      <div class="side-sub">
+        <a class="{% if active_section == 'tasks' and active_menu == 'list' %}active{% endif %}" href="{% url 'web-list' 'tasks' 'list' %}">任务列表</a>
+        <a href="{% url 'web-list' 'tasks' 'logs' %}">任务日志</a>
+        <a href="{% url 'web-list' 'tasks' 'failed' %}">失败任务</a>
+      </div>
+    </div>
+
+    <div class="side-group {% if active_section == 'audit' %}open{% endif %}">
+      <button class="side-group-title" type="button"><i>≣</i><span>审计日志</span><b>⌄</b></button>
+      <div class="side-sub">
+        <a class="{% if active_section == 'audit' and active_menu == 'operations' %}active{% endif %}" href="{% url 'web-list' 'audit' 'operations' %}">操作审计</a>
+        <a href="{% url 'web-list' 'audit' 'login' %}">登录日志</a>
+        <a href="{% url 'web-list' 'audit' 'changes' %}">配置变更日志</a>
+      </div>
+    </div>
+
+    <div class="side-group {% if active_section == 'system' %}open{% endif %}">
+      <button class="side-group-title" type="button"><i>⚙</i><span>系统管理</span><b>⌄</b></button>
+      <div class="side-sub">
+        <a href="{% url 'web-list' 'system' 'users' %}">用户管理</a>
+        <a href="{% url 'web-list' 'system' 'roles' %}">角色管理</a>
+        <a href="{% url 'web-list' 'system' 'permissions' %}">权限管理</a>
+        <a href="{% url 'web-list' 'system' 'configs' %}">系统配置</a>
+        <a href="{% url 'web-list' 'system' 'components' %}">组件配置</a>
+        <a href="{% url 'web-list' 'system' 'health' %}">健康检查</a>
+      </div>
+    </div>
+  </nav>
+</aside>

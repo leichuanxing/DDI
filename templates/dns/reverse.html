@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "components/page_header.html" with page_title=page_title page_description=page_description primary_action="" show_import_export=False %}
+
+<div class="dashboard-grid">
+  <form class="card form-card" method="post">
+    {% csrf_token %}
+    <div class="card-header"><h2>新增反向解析</h2></div>
+    <div class="card-body">
+      <div class="field">
+        <label class="required" for="ip_address">IP 地址</label>
+        <input id="ip_address" name="ip_address" placeholder="192.168.31.10">
+        <span class="help-text">系统会自动生成对应的 in-addr.arpa Zone 和 PTR 名称。</span>
+      </div>
+      <div class="field">
+        <label class="required" for="target">PTR 指向</label>
+        <input id="target" name="target" placeholder="host.devnets.net">
+      </div>
+      <div class="field">
+        <label for="ttl">TTL</label>
+        <input id="ttl" name="ttl" type="number" min="0" value="3600">
+      </div>
+    </div>
+    <div class="form-footer">
+      <a class="btn btn-soft" href="/ui/dns/records/">记录管理</a>
+      <button class="btn btn-primary" type="submit">保存并下发</button>
+    </div>
+  </form>
+
+  <section class="card table-card">
+    <div class="card-header"><h2>最近 PTR 记录</h2></div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr><th>反向 Zone</th><th>PTR 名称</th><th>指向</th><th>TTL</th><th>同步时间</th></tr>
+        </thead>
+        <tbody>
+          {% for record in records %}
+          <tr>
+            <td>{{ record.zone.name }}</td>
+            <td>{{ record.name }}</td>
+            <td class="truncate">{{ record.content }}</td>
+            <td>{{ record.ttl }}</td>
+            <td>{{ record.synced_at|date:"Y-m-d H:i"|default:"-" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5">{% include "components/empty_state.html" with empty_title="暂无 PTR 记录" empty_text="创建反向解析后会显示在这里。" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="card table-card">
+  <div class="card-header"><h2>最近 DNS 任务</h2></div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead><tr><th>任务类型</th><th>目标服务</th><th>状态</th><th>完成时间</th><th>错误信息</th></tr></thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr>
+          <td>{{ task.task_type }}</td>
+          <td>{{ task.target_service }}</td>
+          <td><span class="status-badge status-{{ task.status }}">{{ task.status }}</span></td>
+          <td>{{ task.finished_at|date:"Y-m-d H:i"|default:"-" }}</td>
+          <td class="truncate">{{ task.error_message|default:"-" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">{% include "components/empty_state.html" with empty_title="暂无 DNS 任务" empty_text="下发记录后会生成任务或变更日志。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

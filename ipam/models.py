@@ -1,183 +1,108 @@
-"""
-IPAM模块 - 数据模型
-定义区域、VLAN、子网、IP地址等核心数据结构
-支持CIDR自动计算、IP状态约束、批量分配等能力
-"""
-
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
-from accounts.models import User
+import ipaddress
 
 
-class Region(models.Model):
-    """区域表 - 用于区分不同机房、园区、楼层、分支机构"""
-    name = models.CharField('区域名称', max_length=100, unique=True)
-    code = models.CharField('区域编码', max_length=50, unique=True)
+class AddressSpace(models.Model):
+    name = models.CharField('地址空间名称', max_length=64, unique=True)
+    code = models.CharField('地址空间编码', max_length=64, unique=True)
     description = models.TextField('描述', blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
-    
+
     class Meta:
-        verbose_name = '区域'
-        verbose_name_plural = verbose_name
-        ordering = ['name']
-    
+        verbose_name = '地址空间'
+        verbose_name_plural = '地址空间'
+
     def __str__(self):
         return self.name
-    
-    @property
-    def subnet_count(self):
-        """统计该区域下的子网数量"""
-        return self.subnets.count()
-    
-    @property
-    def vlan_count(self):
-        """统计该区域下的VLAN数量"""
-        return self.vlans.count()
-
-
-class VLAN(models.Model):
-    """VLAN表"""
-    vlan_id = models.IntegerField('VLAN ID', unique=True)
-    name = models.CharField('VLAN名称', max_length=100)
-    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True,
-                               related_name='vlans', verbose_name='所属区域')
-    purpose = models.CharField('用途', max_length=200, blank=True)
-    gateway = models.GenericIPAddressField('网关地址', blank=True, null=True)
-    description = models.TextField('描述', blank=True)
-    created_at = models.DateTimeField('创建时间', auto_now_add=True)
-    updated_at = models.DateTimeField('更新时间', auto_now=True)
-    
-    class Meta:
-        verbose_name = 'VLAN'
-        verbose_name_plural = verbose_name
-        ordering = ['vlan_id']
-    
-    def __str__(self):
-        return f"VLAN {self.vlan_id} - {self.name}"
 
 
 class Subnet(models.Model):
-    """子网管理"""
-    PURPOSE_CHOICES = (
-        ('office', '办公网'),
-        ('server', '服务器网'),
-        ('monitor', '监控网'),
-        ('guest', '访客网'),
-        ('management', '管理网'),
-        ('storage', '存储网'),
-        ('dmz', 'DMZ区'),
-        ('other', '其他'),
-    )
-    
-    name = models.CharField('子网名称', max_length=200)
-    cidr = models.CharField('网段地址', max_length=50, unique=True)
-    gateway = models.GenericIPAddressField('网关地址', blank=True, null=True)
-    prefix_len = models.IntegerField('掩码位数')
-    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True,
-                              related_name='subnets', verbose_name='所属区域')
-    vlan = models.ForeignKey(VLAN, on_delete=models.SET_NULL, null=True, blank=True,
-                            related_name='subnets', verbose_name='所属VLAN')
-    purpose = models.CharField('用途', max_length=50, choices=PURPOSE_CHOICES, default='other')
-    description = models.TextField('备注', blank=True)
+    STATUS_CHOICES = [('enabled', '启用'), ('disabled', '停用'), ('planned', '规划中')]
+    address_space = models.ForeignKey(AddressSpace, verbose_name='地址空间', related_name='subnets', on_delete=models.PROTECT)
+    cidr = models.CharField('CIDR', max_length=64)
+    gateway = models.GenericIPAddressField('网关', null=True, blank=True)
+    netmask = models.CharField('掩码', max_length=64, blank=True)
+    vlan_id = models.IntegerField('VLAN ID', null=True, blank=True)
+    vlan_name = models.CharField('VLAN 名称', max_length=64, blank=True)
+    location = models.CharField('位置', max_length=128, blank=True)
+    usage_type = models.CharField('用途', max_length=64, blank=True)
+    description = models.TextField('描述', blank=True)
+    status = models.CharField('状态', max_length=16, choices=STATUS_CHOICES, default='enabled')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
-    
+
     class Meta:
-        verbose_name = '子网'
-        verbose_name_plural = verbose_name
-        ordering = ['cidr']
-    
+        verbose_name = '网段'
+        verbose_name_plural = '网段'
+        unique_together = ('address_space', 'cidr')
+
+    def clean(self):
+        try:
+            net = ipaddress.ip_network(self.cidr, strict=False)
+        except ValueError as exc:
+            raise ValidationError({'cidr': f'CIDR 格式错误: {exc}'})
+        self.cidr = str(net)
+        self.netmask = str(net.netmask)
+        for other in Subnet.objects.filter(address_space=self.address_space).exclude(pk=self.pk):
+            if net.overlaps(ipaddress.ip_network(other.cidr, strict=False)):
+                raise ValidationError({'cidr': f'网段与 {other.cidr} 冲突'})
+        if self.gateway and ipaddress.ip_address(self.gateway) not in net:
+            raise ValidationError({'gateway': '网关必须属于当前网段'})
+
+    @property
+    def network(self):
+        return ipaddress.ip_network(self.cidr, strict=False)
+
     def __str__(self):
-        return f"{self.name} ({self.cidr})"
-    
-    @property
-    def total_ips(self):
-        """总可用IP数（扣除网络地址和广播地址）"""
-        from common.ip_utils import get_network_info
-        info = get_network_info(self.cidr)
-        return info['num_addresses'] - 2  # 减去网络地址和广播地址
-    
-    @property
-    def allocated_ips(self):
-        """已分配IP数"""
-        return self.ip_addresses.filter(status='allocated').count()
-    
-    @property
-    def available_ips(self):
-        """空闲IP数 = 总IP数 - 非空闲非禁用的IP数"""
-        from common.ip_utils import get_network_info
-        info = get_network_info(self.cidr)
-        total = info['num_addresses'] - 2
-        used = self.ip_addresses.exclude(status='available').exclude(status='disabled').count()
-        return total - used
-    
-    @property
-    def usage_percent(self):
-        """使用率百分比"""
-        total = self.total_ips
-        if total == 0:
-            return 0
-        return round((self.allocated_ips / total) * 100, 1)
+        return self.cidr
 
 
 class IPAddress(models.Model):
-    """IP地址管理"""
-    STATUS_CHOICES = (
-        ('available', '空闲'),
-        ('allocated', '已分配'),
-        ('reserved', '保留'),
-        ('conflict', '冲突'),
-        ('disabled', '禁用'),
-    )
-    
-    BINDING_TYPE_CHOICES = (
-        ('static', '静态绑定'),
-    )
-    
-    ip_address = models.GenericIPAddressField('IP地址', protocol='both')
-    subnet = models.ForeignKey(Subnet, on_delete=models.CASCADE, related_name='ip_addresses',
-                               verbose_name='所属子网')
-    status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='available')
-    hostname = models.CharField('主机名', max_length=200, blank=True)
-    mac_address = models.CharField('MAC地址', max_length=17, blank=True)
-    device_name = models.CharField('设备名称', max_length=200, blank=True)
-    owner = models.CharField('使用人', max_length=100, blank=True)
-    department = models.CharField('部门', max_length=100, blank=True)
-    device_type = models.CharField('设备类型', max_length=50, blank=True)
-    binding_type = models.CharField('绑定方式', max_length=20, choices=BINDING_TYPE_CHOICES,
-                                    default='static')
-    notes = models.TextField('备注', blank=True)
+    STATUS_CHOICES = [
+        ('available', '可用'), ('used', '已使用'), ('reserved', '预留'),
+        ('dhcp_dynamic', 'DHCP 动态分配'), ('dhcp_reserved', 'DHCP 固定分配'), ('disabled', '禁用'),
+    ]
+    subnet = models.ForeignKey(Subnet, verbose_name='网段', related_name='ip_addresses', on_delete=models.CASCADE)
+    ip_address = models.GenericIPAddressField('IP 地址')
+    hostname = models.CharField('主机名', max_length=255, blank=True)
+    mac_address = models.CharField('MAC 地址', max_length=32, blank=True)
+    status = models.CharField('状态', max_length=32, choices=STATUS_CHOICES, default='available')
+    usage_type = models.CharField('用途', max_length=64, blank=True)
+    owner = models.CharField('使用人', max_length=64, blank=True)
+    department = models.CharField('部门', max_length=64, blank=True)
+    description = models.TextField('描述', blank=True)
+    dns_record = models.ForeignKey('dns.DNSRecord', verbose_name='DNS记录', null=True, blank=True, on_delete=models.SET_NULL)
+    dhcp_reservation = models.ForeignKey('dhcp.DHCPReservation', verbose_name='DHCP保留地址', null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
-                                   related_name='created_ips', verbose_name='创建人')  # 记录IP分配操作人
-    
+
     class Meta:
-        verbose_name = 'IP地址'
-        verbose_name_plural = verbose_name
-        unique_together = ['ip_address', 'subnet']  # 同一子网内IP唯一
-        ordering = ['ip_address']
-    
+        verbose_name = 'IP 地址'
+        verbose_name_plural = 'IP 地址'
+        unique_together = ('subnet', 'ip_address')
+        indexes = [models.Index(fields=['ip_address']), models.Index(fields=['status'])]
+
+    def clean(self):
+        if ipaddress.ip_address(self.ip_address) not in self.subnet.network:
+            raise ValidationError({'ip_address': 'IP 地址必须属于所属网段'})
+
     def __str__(self):
-        return f"{self.ip_address} ({self.get_status_display()})"
-    
-    def allocate(self, **kwargs):
-        """分配IP - 将状态置为allocated，并填充分配信息（主机名、MAC地址等）"""
-        self.status = 'allocated'
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-        self.save()
-    
-    def release(self):
-        """释放IP - 将状态置为available，并清空所有分配信息"""
-        self.status = 'available'
-        self.hostname = ''
-        self.mac_address = ''
-        self.device_name = ''
-        self.owner = ''
-        self.department = ''
-        self.device_type = ''
-        self.binding_type = 'static'
-        self.notes = ''
-        self.save()
+        return str(self.ip_address)
+
+
+class IPAddressHistory(models.Model):
+    ip_address = models.ForeignKey(IPAddress, verbose_name='IP 地址', related_name='histories', on_delete=models.CASCADE)
+    action = models.CharField('动作', max_length=64)
+    old_status = models.CharField('原状态', max_length=32, blank=True)
+    new_status = models.CharField('新状态', max_length=32, blank=True)
+    operator = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name='操作人', null=True, blank=True, on_delete=models.SET_NULL)
+    detail = models.JSONField('详情', default=dict, blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'IP 使用历史'
+        verbose_name_plural = 'IP 使用历史'
+        ordering = ['-created_at']

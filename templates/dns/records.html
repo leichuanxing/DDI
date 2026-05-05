@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "components/page_header.html" with page_title=page_title page_description=page_description primary_action="" show_import_export=False %}
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div>
+      <div class="label">DNS 记录总数</div>
+      <div class="value">{{ summary.total }}</div>
+      <div class="trend">本地纳管记录</div>
+    </div>
+    <div class="stat-icon">R</div>
+  </div>
+  <div class="stat-card stat-green">
+    <div>
+      <div class="label">正向记录</div>
+      <div class="value">{{ summary.forward }}</div>
+      <div class="trend">A / AAAA / CNAME / MX</div>
+    </div>
+    <div class="stat-icon">A</div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div>
+      <div class="label">PTR 记录</div>
+      <div class="value">{{ summary.reverse }}</div>
+      <div class="trend">反向解析</div>
+    </div>
+    <div class="stat-icon">P</div>
+  </div>
+  <div class="stat-card stat-orange">
+    <div>
+      <div class="label">未同步记录</div>
+      <div class="value">{{ summary.unsynced }}</div>
+      <div class="trend">需要下发或同步</div>
+    </div>
+    <div class="stat-icon">!</div>
+  </div>
+</div>
+
+<form class="card search-panel" method="get">
+  <div class="field">
+    <label for="mode">视图</label>
+    <select id="mode" name="mode">
+      <option value="all" {% if mode == "all" %}selected{% endif %}>全部记录</option>
+      <option value="forward" {% if mode == "forward" %}selected{% endif %}>正向记录</option>
+      <option value="reverse" {% if mode == "reverse" %}selected{% endif %}>PTR 记录</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="zone_id_filter">Zone</label>
+    <select id="zone_id_filter" name="zone_id">
+      <option value="">全部 Zone</option>
+      {% for zone in zones %}<option value="{{ zone.id }}" {% if zone_id == zone.id|stringformat:"s" %}selected{% endif %}>{{ zone.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="record_type">记录类型</label>
+    <select id="record_type" name="record_type">
+      <option value="">全部类型</option>
+      {% for item in record_types %}<option value="{{ item }}" {% if record_type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="q">关键词</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="名称、内容或 Zone">
+  </div>
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="/ui/dns/records/">重置</a>
+</form>
+
+<section class="card form-card" id="record-form">
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="mode" value="{{ mode }}">
+    <input type="hidden" name="action" value="save">
+    <input type="hidden" name="record_id" value="{{ edit_record.id|default:'' }}">
+    <div class="card-header">
+      <h2>{% if edit_record %}编辑 DNS 记录{% else %}新增 DNS 记录{% endif %}</h2>
+      {% if edit_record %}<a class="btn btn-ghost btn-sm" href="/ui/dns/records/">取消编辑</a>{% endif %}
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label class="required" for="record_type_form">记录类型</label>
+        <select id="record_type_form" name="record_type" data-record-type>
+          {% for item in record_types %}<option value="{{ item }}" {% if selected_record_type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field" data-standard-field>
+        <label for="zone_id">选择 Zone</label>
+        <select id="zone_id" name="zone_id">
+          <option value="">使用新 Zone</option>
+          {% for zone in zones %}<option value="{{ zone.id }}" {% if selected_zone_id == zone.id %}selected{% endif %}>{{ zone.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field" data-standard-field>
+        <label for="zone_name">Zone 名称</label>
+        <input id="zone_name" name="zone_name" value="{% if edit_record %}{{ edit_record.zone.name }}{% endif %}" placeholder="devnets.net">
+      </div>
+      <div class="field" data-standard-field>
+        <label for="name">记录名称</label>
+        <input id="name" name="name" value="{{ edit_record.name|default:'' }}" placeholder="www 或 @">
+      </div>
+      <div class="field" data-standard-field>
+        <label class="required" for="content">记录内容</label>
+        <input id="content" name="content" value="{% if edit_record.record_type != 'PTR' %}{{ edit_record.content|default:'' }}{% endif %}" placeholder="IP、别名、文本或目标主机">
+      </div>
+      <div class="field" data-ptr-field>
+        <label for="ip_address">PTR IP 地址</label>
+        <input id="ip_address" name="ip_address" placeholder="192.168.31.10">
+        <span class="help-text">填写后自动生成反向 Zone 和 PTR 名称。</span>
+      </div>
+      <div class="field" data-ptr-field>
+        <label for="target">PTR 指向</label>
+        <input id="target" name="target" value="{% if edit_record.record_type == 'PTR' %}{{ edit_record.content }}{% endif %}" placeholder="host.devnets.net">
+      </div>
+      <div class="field">
+        <label for="ttl">TTL</label>
+        <input id="ttl" name="ttl" type="number" min="0" value="{{ edit_record.ttl|default:3600 }}">
+      </div>
+      <div class="field" data-mx-field>
+        <label for="priority">MX 优先级</label>
+        <input id="priority" name="priority" type="number" min="0" value="{{ edit_record.priority|default:10 }}">
+      </div>
+      <div class="field" data-a-field>
+        <label>联动 PTR</label>
+        <label style="display:flex;align-items:center;min-height:36px;font-weight:500">
+          <input type="checkbox" name="create_ptr">
+          同时创建反向解析
+        </label>
+      </div>
+    </div>
+    <div class="form-footer">
+      <a class="btn btn-soft" href="/ui/dns/sync/">DNS 数据同步</a>
+      <button class="btn btn-primary" type="submit">{% if edit_record %}保存并重新下发{% else %}保存并下发{% endif %}</button>
+    </div>
+  </form>
+</section>
+
+<section class="card table-card">
+  <div class="table-tools">
+    <span class="selected-count">共 {{ total_count }} 条 · 最多显示 50 条</span>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Zone</th><th>名称</th><th>类型</th><th>内容</th><th>TTL</th><th>优先级</th><th>状态</th><th>同步时间</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+        <tr>
+          <td>{{ record.zone.name }}</td>
+          <td class="truncate">{{ record.name }}</td>
+          <td><span class="status-badge status-{{ record.record_type }}">{{ record.record_type }}</span></td>
+          <td class="truncate">{{ record.content }}</td>
+          <td>{{ record.ttl }}</td>
+          <td>{{ record.priority|default:"-" }}</td>
+          <td><span class="status-badge {% if record.disabled %}status-disabled{% elif record.synced_at %}status-enabled{% else %}status-pending{% endif %}">{% if record.disabled %}禁用{% elif record.synced_at %}已下发{% else %}待下发{% endif %}</span></td>
+          <td>{{ record.synced_at|date:"Y-m-d H:i"|default:"-" }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn btn-soft btn-sm" href="/ui/dns/records/?edit={{ record.id }}#record-form">编辑</a>
+              <form method="post" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="mode" value="{{ mode }}">
+                <input type="hidden" name="action" value="push">
+                <input type="hidden" name="record_id" value="{{ record.id }}">
+                <button class="btn btn-info btn-sm" type="submit">下发</button>
+              </form>
+              <form method="post" style="display:inline" onsubmit="return confirm('确认删除该 DNS 记录？');">
+                {% csrf_token %}
+                <input type="hidden" name="mode" value="{{ mode }}">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="record_id" value="{{ record.id }}">
+                <button class="btn btn-danger btn-sm" type="submit">删除</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9">{% include "components/empty_state.html" with empty_title="暂无 DNS 记录" empty_text="创建记录后会显示在这里。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const typeSelect = document.querySelector("[data-record-type]");
+  if (!typeSelect) return;
+  const toggle = function () {
+    const type = typeSelect.value;
+    document.querySelectorAll("[data-ptr-field]").forEach((node) => { node.style.display = type === "PTR" ? "" : "none"; });
+    document.querySelectorAll("[data-standard-field]").forEach((node) => { node.style.display = type === "PTR" ? "none" : ""; });
+    document.querySelectorAll("[data-mx-field]").forEach((node) => { node.style.display = type === "MX" ? "" : "none"; });
+    document.querySelectorAll("[data-a-field]").forEach((node) => { node.style.display = type === "A" ? "" : "none"; });
+  };
+  typeSelect.addEventListener("change", toggle);
+  toggle();
+})();
+</script>
+{% endblock %}

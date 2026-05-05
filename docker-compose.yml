@@ -1,0 +1,125 @@
+services:
+  ddi-web:
+    build: .
+    image: ddi-web:local
+    container_name: ddi-web
+    depends_on:
+      ddi-mysql:
+        condition: service_healthy
+      ddi-pdns:
+        condition: service_started
+      ddi-kea:
+        condition: service_started
+    environment:
+      DJANGO_DEBUG: "false"
+      DJANGO_SECRET_KEY: "change-me-please"
+      DJANGO_ALLOWED_HOSTS: "*"
+      MYSQL_HOST: ddi-mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ddi_system
+      MYSQL_USER: ddi
+      MYSQL_PASSWORD: ddi_password
+      PDNS_API_URL: http://ddi-pdns:8081
+      PDNS_API_KEY: ddi-pdns-key
+      KEA_API_URL: http://ddi-kea:8000
+      KEA_LEASE_DB_HOST: ddi-mysql
+      KEA_LEASE_DB_PORT: "3306"
+      KEA_LEASE_DB_NAME: kea
+      KEA_LEASE_DB_USER: ddi
+      KEA_LEASE_DB_PASSWORD: ddi_password
+      CELERY_BROKER_URL: filesystem://
+      CELERY_RESULT_BACKEND: rpc://
+      TIME_ZONE: Asia/Shanghai
+    volumes:
+      - .:/app
+      - ddi_celery_queue:/app/celery_queue
+    ports:
+      - "8000:8000"
+    networks: [ddi-net]
+
+  ddi-mysql:
+    image: mysql:8.4
+    container_name: ddi-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --log-bin-trust-function-creators=1
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ddi_system
+      MYSQL_USER: ddi
+      MYSQL_PASSWORD: ddi_password
+      TZ: Asia/Shanghai
+    volumes:
+      - ddi_mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [ddi-net]
+
+  ddi-pdns:
+    build:
+      context: ./docker/pdns
+    image: ddi-pdns:local
+    container_name: ddi-pdns
+    depends_on:
+      ddi-mysql:
+        condition: service_healthy
+    environment:
+      PDNS_AUTH_API: "yes"
+      PDNS_AUTH_API_KEY: ddi-pdns-key
+      PDNS_AUTH_WEBSERVER: "yes"
+      PDNS_AUTH_WEBSERVER_ADDRESS: 0.0.0.0
+      PDNS_AUTH_WEBSERVER_PORT: "8081"
+      PDNS_AUTH_WEBSERVER_ALLOW_FROM: 0.0.0.0/0,::/0
+      PDNS_AUTH_LAUNCH: gmysql
+      PDNS_AUTH_GMYSQL_HOST: ddi-mysql
+      PDNS_AUTH_GMYSQL_USER: ddi
+      PDNS_AUTH_GMYSQL_PASSWORD: ddi_password
+      PDNS_AUTH_GMYSQL_DBNAME: powerdns
+      PDNS_AUTH_LOCAL_ADDRESS: 0.0.0.0
+      PDNS_FORWARD_ZONES: devnets.net
+      PUBLIC_DNS_1: 223.5.5.5
+      PUBLIC_DNS_2: 119.29.29.29
+    volumes:
+      - ddi_pdns_data:/var/lib/powerdns
+      - ./docker/pdns/runtime:/etc/ddi-pdns:ro
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8081:8081"
+    networks: [ddi-net]
+
+  ddi-kea:
+    build:
+      context: ./docker/kea
+    image: ddi-kea:local
+    container_name: ddi-kea
+    depends_on:
+      ddi-mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: ddi-mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: kea
+      MYSQL_USER: ddi
+      MYSQL_PASSWORD: ddi_password
+    volumes:
+      - ./docker/kea:/etc/kea
+    ports:
+      - "67:67/udp"
+      - "547:547/udp"
+    expose:
+      - "8000"
+    networks: [ddi-net]
+
+volumes:
+  ddi_mysql_data:
+  ddi_celery_queue:
+  ddi_pdns_data:
+
+networks:
+  ddi-net:
+    driver: bridge
