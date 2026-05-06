@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260507a">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+<form method="post" class="card form-card">
+  {% csrf_token %}
+  <div class="card-header"><h2>{{ page_title }}</h2></div>
+  <div class="card-body">
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="field">
+      <label class="required" for="{{ form.mode.id_for_label }}">{{ form.mode.label }}</label>
+      {{ form.mode }}
+      {% for e in form.mode.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label for="{{ form.ip.id_for_label }}">{{ form.ip.label }}</label>
+      {{ form.ip }}
+      <p class="field-hint">选择「单 IP Ping」时填写。</p>
+      {% for e in form.ip.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label for="{{ form.subnet.id_for_label }}">{{ form.subnet.label }}</label>
+      {{ form.subnet }}
+      <p class="field-hint">选择「子网批量 Ping」时选择；单次最多 {{ max_subnet_hosts }} 个地址。</p>
+      {% for e in form.subnet.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+  <div class="form-footer">
+    <a class="btn btn-ghost" href="{{ back_url }}">取消</a>
+    <button class="btn btn-primary" type="submit">{{ submit_text }}</button>
+  </div>
+</form>
+{% endblock %}

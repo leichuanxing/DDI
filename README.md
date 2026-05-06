@@ -32,13 +32,13 @@
 
 ### 2. IPAM
 
-- 地址空间管理
-- 网段管理
-- 自动生成网段 IP 清单
-- IP 地址分配、释放、预留、禁用
-- IP 使用历史
-- 地址利用率统计
-- Excel 导入导出
+- 区域管理
+- VLAN 管理
+- 子网管理
+- IP 地址管理
+- 网络探测
+- 子网自动生成 IP 清单
+- IP 地址分配、释放、编辑、删除
 
 ### 3. DNS
 
@@ -84,7 +84,7 @@ audit/      审计日志与中间件
 common/     通用响应、权限、审计工具
 dhcp/       Kea 模型、API、服务、客户端
 dns/        PowerDNS 模型、API、服务、客户端
-ipam/       地址空间、网段、IP 地址、利用率
+ipam/       区域、VLAN、子网、IP、网络探测
 system/     仪表盘、系统配置、健康检查、统一页面
 tasks/      异步任务、任务日志、Celery 执行
 docker/     ddi-web / pdns / kea / mysql 启动配置
@@ -152,7 +152,7 @@ bash scripts/build_offline_bundle.sh
 - `offline_bundle/package/`：离线部署文件
 - `offline_bundle/ddi-offline-bundle.tar.gz`：可直接拷贝的整体安装包
 
-离线目标机执行：
+离线目标机执行（解压后顶层目录默认与打包输出目录同名，一般为 `offline_bundle`，其下含 `images/` 与 `package/`）：
 
 ```bash
 tar -xzf ddi-offline-bundle.tar.gz
@@ -160,6 +160,8 @@ cd offline_bundle/package
 cp .env.example .env
 bash scripts/install.sh
 ```
+
+若打包时指定了其它输出路径（`bash scripts/build_offline_bundle.sh /path/to/自定义目录`），请将上面 `offline_bundle` 换成该路径的**最后一级目录名**。
 
 离线模式使用：
 
@@ -172,6 +174,7 @@ bash scripts/install.sh
 - 离线安装机需要预先安装好 Docker Engine 和 Docker Compose 插件
 - 离线包内已经包含 `ddi-web`、`ddi-pdns`、`ddi-kea`、`mysql:8.4` 镜像
 - 打包机与安装机应保持相同 CPU 架构，例如都为 `x86_64`
+- 打包脚本会读取仓库根目录 `version.conf` 中的 `ddi_version`，作为 Docker 构建参数写入各业务镜像标签（`org.opencontainers.image.version`），并将该文件一并放入离线 `package/` 供运行时注入版本展示
 
 ## 容器与端口
 
@@ -273,17 +276,17 @@ python manage.py runserver 0.0.0.0:8000
 运行方式：
 
 ```bash
-SQLITE_DATABASE=/tmp/ddi_test.sqlite3 DJANGO_DEBUG=true python manage.py test tests
+docker compose exec ddi-web python manage.py test tests
 ```
 
 ## Web 页面入口
 
 - `/` 或 `/dashboard/`：首页仪表盘
-- `/ui/ipam/address-spaces/`：地址空间
-- `/ui/ipam/subnets/`：网段管理
-- `/ui/ipam/ip-addresses/`：IP 地址管理
-- `/ui/ipam/utilization/`：地址利用率
-- `/ui/ipam/histories/`：IP 使用历史
+- `/ipam/regions/`：区域管理
+- `/ipam/vlans/`：VLAN 管理
+- `/ipam/subnets/`：子网管理
+- `/ipam/ips/`：IP 地址
+- `/ipam/network-scan/`：网络探测
 - `/ui/dns/service/`：DNS 服务配置
 - `/ui/dns/zones/`：Zone 管理
 - `/ui/dns/records/`：记录管理
@@ -326,23 +329,19 @@ SQLITE_DATABASE=/tmp/ddi_test.sqlite3 DJANGO_DEBUG=true python manage.py test te
 
 ### IPAM
 
-- `GET /api/ipam/address-spaces/`
-- `POST /api/ipam/address-spaces/`
+- `GET /api/ipam/regions/`
+- `POST /api/ipam/regions/`
+- `GET /api/ipam/vlans/`
+- `POST /api/ipam/vlans/`
 - `GET /api/ipam/subnets/`
 - `POST /api/ipam/subnets/`
 - `POST /api/ipam/subnets/{id}/generate-ips/`
-- `GET /api/ipam/subnets/{id}/utilization/`
-- `GET /api/ipam/ip-addresses/`
-- `POST /api/ipam/ip-addresses/{id}/allocate/`
-- `POST /api/ipam/ip-addresses/{id}/release/`
-- `POST /api/ipam/ip-addresses/{id}/reserve/`
-- `POST /api/ipam/ip-addresses/{id}/disable/`
-- `GET /api/ipam/ip-addresses/{id}/histories/`
-- `GET /api/ipam/utilization/`
-- `GET /api/ipam/subnets/export-excel/`
-- `POST /api/ipam/subnets/import-excel/`
-- `GET /api/ipam/ip-addresses/export-excel/`
-- `POST /api/ipam/ip-addresses/import-excel/`
+- `GET /api/ipam/ips/`
+- `POST /api/ipam/ips/{id}/allocate/`
+- `POST /api/ipam/ips/{id}/release/`
+- `POST /api/ipam/ips/{id}/ping/`
+- `POST /api/ipam/network-scan/ping/`
+- `POST /api/ipam/network-scan/subnet/`
 
 ### DNS
 
@@ -427,7 +426,8 @@ SQLITE_DATABASE=/tmp/ddi_test.sqlite3 DJANGO_DEBUG=true python manage.py test te
 - Celery 使用 `filesystem://` broker，避免额外引入 Redis / RabbitMQ 容器
 - `ddi-web` 容器内同时运行 Gunicorn 和 Celery Worker
 - DHCP 当前已支持 Relay 地址生成到 Kea `subnet4.relay.ip-addresses`
-- IPAM 新建网段后会自动生成网段内 IP 地址清单
+- IPAM 已切换为区域 / VLAN / 子网 / IP / 网络探测五个页面
+- IPAM 新建子网后可自动生成网段内 IP 地址清单
 - DHCP 租约同步会把 Kea Lease 同步到本地 `DHCPLease`
 
 ## 常用运维命令

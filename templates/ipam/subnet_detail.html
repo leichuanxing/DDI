@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}子网详情{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260506g">{% endblock %}
+{% block extra_js %}<script src="{% static 'ipam/ipam.js' %}?v=20260506f"></script>{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+<section class="card detail-card">
+  <div class="card-header"><h2>{{ subnet.name }}</h2><a class="btn btn-ghost btn-sm" href="{% url 'ipam-subnet-list' %}">返回列表</a></div>
+  <div class="card-body detail-grid">
+    <div><span>网段</span><strong>{{ subnet.cidr }}</strong></div>
+    <div><span>网关</span><strong>{{ subnet.gateway|default:"-" }}</strong></div>
+    <div><span>区域</span><strong>{{ subnet.region.name|default:"-" }}</strong></div>
+    <div><span>VLAN</span><strong>{% if subnet.vlan %}{{ subnet.vlan.name }} ({{ subnet.vlan.vlan_id }}){% else %}-{% endif %}</strong></div>
+    <div><span>网络地址</span><strong>{{ subnet.network_address }}</strong></div>
+    <div><span>广播地址</span><strong>{{ subnet.broadcast_address|default:"-" }}</strong></div>
+    <div><span>总 IP 数（主机位）</span><strong>{{ subnet.total_ips }}</strong></div>
+    <div><span>已占用</span><strong>{{ subnet.used_ips }}</strong></div>
+    <div><span>{% if ip_list_merged %}空闲（含未入库主机位）{% else %}空闲{% endif %}</span><strong>{{ free_address_slots }}</strong></div>
+    <div><span>使用率</span><strong>{{ subnet.utilization_rate }}%</strong></div>
+    <div class="field-full"><span>描述</span><strong>{{ subnet.description|default:"-" }}</strong></div>
+  </div>
+</section>
+
+<section class="card subnet-detail-usage-card">
+  <div class="card-header"><h2>IP 地址使用情况</h2></div>
+  <div class="card-body">
+    <div class="subnet-progress subnet-detail-usage-bar">
+      <div class="progress {% if subnet.utilization_rate >= 90 %}danger{% elif subnet.utilization_rate >= 70 %}warn{% endif %}"><span style="width: {{ subnet.utilization_rate }}%"></span></div>
+      <div class="subnet-meta">已占用 {{ subnet.used_ips }} / 可规划主机位 {{ subnet.total_ips }}（利用率 {{ subnet.utilization_rate }}%，空闲 {{ free_address_slots }}）</div>
+    </div>
+    <div class="ip-status-breakdown">
+      {% for row in status_breakdown %}
+      {% if row.count %}
+      <div class="ip-status-breakdown-item">
+        <span class="ip-status-breakdown-label">{{ row.label }}</span>
+        <strong class="ip-status-breakdown-count">{{ row.count }}</strong>
+      </div>
+      {% endif %}
+      {% endfor %}
+      {% if ip_list_merged and untracked_host_count %}
+      <div class="ip-status-breakdown-item ip-status-breakdown-untracked">
+        <span class="ip-status-breakdown-label">空闲（未入库）</span>
+        <strong class="ip-status-breakdown-count">{{ untracked_host_count }}</strong>
+      </div>
+      {% endif %}
+    </div>
+    {% if ip_list_empty %}
+    <p class="subnet-detail-usage-hint">当前 CIDR 下无可枚举的主机地址。</p>
+    {% elif ip_list_truncated %}
+    <p class="subnet-detail-usage-hint">可主机位超过 {{ merge_host_cap }}，本页仅展示已写入库的 IP；要查看网段内全部地址请先「生成 IP」或缩小网段。</p>
+    {% elif ip_list_merged and untracked_host_count %}
+    <p class="subnet-detail-usage-hint">清单已按网段展开全部主机位；其中 {{ untracked_host_count }} 个尚未写入 IP 库，表中显示为「空闲（未入库）」。可直接点「分配」填写归属信息。</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card table-card detail-table-card subnet-detail-table-card">
+  <div class="card-header subnet-detail-table-head">
+    <h2>IP 地址清单</h2>
+    {% if is_admin %}
+    <span class="subnet-detail-table-head-hint">管理员可分配空闲/预留地址，或编辑归属信息；已使用地址可释放。</span>
+    {% endif %}
+  </div>
+  {% if ip_list_merged %}
+  <p class="subnet-detail-list-mode-hint">当前为<strong>全量主机位</strong>视图；筛选状态后仅浏览已入库记录。</p>
+  {% elif ip_list_truncated %}
+  <p class="subnet-detail-list-mode-hint">当前为<strong>已入库</strong>视图（网段过大未展开全部主机位）。</p>
+  {% endif %}
+  <form method="get" class="subnet-detail-ip-filter subnet-detail-ip-toolbar">
+    <div class="field">
+      <label for="sd_status">状态</label>
+      <select id="sd_status" name="status">
+        <option value="">全部</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field field-per-page">
+      <label for="sd_per_page">每页</label>
+      <select id="sd_per_page" name="per_page">
+        {% for n in per_page_choices %}
+        <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }} 条</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit">应用</button>
+    <a class="btn btn-ghost" href="{% url 'ipam-subnet-detail' subnet.id %}?per_page={{ per_page }}">重置筛选</a>
+  </form>
+  <div class="table-responsive subnet-detail-table-wrap">
+    <table class="data-table subnet-detail-ip-table">
+      <thead>
+        <tr>
+          <th class="subnet-detail-col-ip">IP</th>
+          <th class="subnet-detail-col-status">状态</th>
+          <th>主机名</th>
+          <th>设备名</th>
+          <th>使用人</th>
+          <th class="subnet-detail-col-mac">MAC</th>
+          <th class="subnet-detail-col-desc">备注</th>
+          <th class="subnet-detail-col-actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ip in page_obj.object_list %}
+        <tr>
+          <td class="subnet-detail-col-ip"><code class="subnet-detail-ip-code">{{ ip.ip_address }}</code></td>
+          <td><span class="status-badge status-{{ ip.status }}{% if ip_list_merged %}{% if not ip.has_db_record %} ipam-untracked-badge{% endif %}{% endif %}">{{ ip.get_status_display }}</span></td>
+          <td>{{ ip.hostname|default:"-" }}</td>
+          <td>{{ ip.device_name|default:"-" }}</td>
+          <td>{{ ip.owner|default:"-" }}</td>
+          <td class="subnet-detail-col-mac">{{ ip.mac_address|default:"-" }}</td>
+          <td class="subnet-detail-col-desc">{% if ip.description %}{{ ip.description|truncatechars:28 }}{% else %}-{% endif %}</td>
+          <td class="subnet-detail-actions">
+            {% if is_admin %}
+            <div class="row-actions subnet-detail-row-actions">
+              {% if ip.status == 'available' or ip.status == 'reserved' %}
+                {% if ip_list_merged and not ip.has_db_record %}
+                <button class="btn btn-soft btn-sm" type="button" data-ipam-allocate data-allocate-url="{% url 'ipam-subnet-ip-allocate' subnet.id %}" data-ip="{{ ip.ip_address }}" data-subnet="{{ subnet.cidr }}">分配</button>
+                {% elif ip.pk %}
+                <button class="btn btn-soft btn-sm" type="button" data-ipam-allocate data-id="{{ ip.pk }}" data-ip="{{ ip.ip_address }}" data-subnet="{{ subnet.cidr }}">分配</button>
+                <a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.pk %}">编辑</a>
+                {% endif %}
+              {% elif ip.status == 'used' %}
+                <a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.pk %}">编辑</a>
+                <button class="btn btn-ghost btn-sm" type="button" data-confirm="确认释放 {{ ip.ip_address }} 吗？" data-confirm-url="{% url 'ipam-ip-release' ip.pk %}" data-confirm-success="IP 已释放">释放</button>
+              {% elif ip.status == 'gateway' %}
+                <a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.pk %}">编辑</a>
+              {% elif ip.pk %}
+                <a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.pk %}">编辑</a>
+              {% endif %}
+            </div>
+            {% else %}
+            <span class="subnet-detail-action-muted">只读</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">{% include "components/empty_state.html" with empty_title="暂无记录" empty_text="该条件下没有可展示的地址。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination-bar">
+    <span>
+      共 {{ page_obj.paginator.count }} 条
+      {% if page_obj.paginator.count and page_obj.start_index %}
+      ，本页 {{ page_obj.start_index }}–{{ page_obj.end_index }}
+      {% endif %}
+    </span>
+    <div class="row-actions">
+      {% if page_obj.has_previous %}<a class="btn btn-ghost btn-sm" href="?page={{ page_obj.previous_page_number }}&per_page={{ per_page }}{% if status_filter %}&status={{ status_filter }}{% endif %}">上一页</a>{% endif %}
+      {% if page_obj.has_next %}<a class="btn btn-ghost btn-sm" href="?page={{ page_obj.next_page_number }}&per_page={{ per_page }}{% if status_filter %}&status={{ status_filter }}{% endif %}">下一页</a>{% endif %}
+    </div>
+  </div>
+</section>
+
+{% if is_admin %}
+<div class="modal-mask" hidden id="ipAllocateModal">
+  <div class="confirm-dialog allocate-dialog subnet-detail-allocate-dialog">
+    <h3>分配 IP</h3>
+    <form method="post" id="ipAllocateForm">
+      {% csrf_token %}
+      <input type="hidden" name="ip_address" id="allocateIpAddressHidden" value="" disabled>
+      <div class="field">
+        <label>IP 地址</label>
+        <input type="text" id="allocateIpAddress" readonly>
+      </div>
+      <div class="field">
+        <label>子网</label>
+        <input type="text" id="allocateSubnet" readonly>
+      </div>
+      <div class="field"><label>主机名</label><input type="text" name="hostname" autocomplete="off"></div>
+      <div class="field"><label>设备名</label><input type="text" name="device_name" autocomplete="off"></div>
+      <div class="field"><label>使用人</label><input type="text" name="owner" autocomplete="off"></div>
+      <div class="field"><label>MAC 地址</label><input type="text" name="mac_address" autocomplete="off"></div>
+      <div class="field">
+        <label>绑定方式</label>
+        <select name="bind_type">
+          <option value="manual">手动录入</option>
+          <option value="static">静态绑定</option>
+          <option value="dhcp">DHCP</option>
+        </select>
+      </div>
+      <div class="field field-full"><label>备注</label><textarea name="description" rows="2"></textarea></div>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" type="button" data-ipam-allocate-cancel>取消</button>
+        <button class="btn btn-primary" type="submit">确认分配</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260506b">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+<form method="post" class="card form-card">
+  {% csrf_token %}
+  <div class="card-header"><h2>{{ page_title }}</h2></div>
+  <div class="card-body">
+    {% if form.non_field_errors %}
+    <div class="form-errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div class="field">
+      <label class="required" for="{{ form.vlan_id.id_for_label }}">VLAN ID</label>
+      {{ form.vlan_id }}
+      {% for error in form.vlan_id.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label class="required" for="{{ form.name.id_for_label }}">VLAN 名称</label>
+      {{ form.name }}
+      {% for error in form.name.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label class="required" for="{{ form.region.id_for_label }}">所属区域</label>
+      {{ form.region }}
+      {% for error in form.region.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label for="{{ form.gateway.id_for_label }}">网关</label>
+      {{ form.gateway }}
+      {% for error in form.gateway.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label for="{{ form.usage.id_for_label }}">用途</label>
+      {{ form.usage }}
+      {% for error in form.usage.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="field field-full">
+      <label for="{{ form.description.id_for_label }}">描述</label>
+      {{ form.description }}
+      {% for error in form.description.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+    </div>
+  </div>
+  <div class="form-footer">
+    <a class="btn btn-ghost" href="{{ back_url }}">取消</a>
+    <button class="btn btn-primary" type="submit">{{ submit_text }}</button>
+  </div>
+</form>
+{% endblock %}

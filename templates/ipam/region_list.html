@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}区域管理{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260506b">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" %}
+<section class="card table-card">
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>区域名称</th>
+          <th>区域编码</th>
+          <th>描述</th>
+          <th>子网数</th>
+          <th>VLAN 数</th>
+          <th>创建时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for region in regions %}
+        <tr>
+          <td>{{ region.id }}</td>
+          <td><strong>{{ region.name }}</strong></td>
+          <td>{{ region.code }}</td>
+          <td class="truncate">{{ region.description|default:"-" }}</td>
+          <td><span class="status-badge status-used">{{ region.subnet_count }}</span></td>
+          <td><span class="status-badge status-available">{{ region.vlan_count }}</span></td>
+          <td>{{ region.created_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <div class="row-actions">
+              {% if is_admin %}
+              <a class="btn btn-ghost btn-sm" href="{% url 'ipam-region-edit' region.id %}">编辑</a>
+              <button class="btn btn-ghost btn-sm btn-outline-danger" type="button" data-confirm="确认删除区域“{{ region.name }}”吗？" data-confirm-url="{% url 'ipam-region-delete' region.id %}" data-confirm-success="区域已删除">删除</button>
+              {% else %}
+              <span class="status-badge status-disabled">只读</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">{% include "components/empty_state.html" with empty_title="暂无区域" empty_text="请先创建区域后再录入 VLAN 和子网。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260507a">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+<form method="post" class="card form-card">
+  {% csrf_token %}
+  <div class="card-header"><h2>{{ page_title }}</h2></div>
+  <div class="card-body">
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="field">
+      <label class="required" for="{{ form.host.id_for_label }}">{{ form.host.label }}</label>
+      {{ form.host }}
+      {% for e in form.host.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="field field-full">
+      <label class="required" for="{{ form.ports.id_for_label }}">{{ form.ports.label }}</label>
+      {{ form.ports }}
+      {% if form.ports.help_text %}<p class="field-hint">{{ form.ports.help_text }}</p>{% endif %}
+      {% for e in form.ports.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+  <div class="form-footer">
+    <a class="btn btn-ghost" href="{{ back_url }}">取消</a>
+    <button class="btn btn-primary" type="submit">{{ submit_text }}</button>
+  </div>
+</form>
+{% endblock %}

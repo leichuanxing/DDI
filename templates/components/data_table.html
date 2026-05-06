@@ -8,7 +8,9 @@
         {% else %}
           <button class="btn btn-ghost btn-sm" type="button" data-toast="请先选择数据；批量删除接口将在对应模块接入。">批量删除</button>
         {% endif %}
-        <button class="btn btn-info btn-sm" type="button" data-toast="请先选择数据；批量下发请使用 DNS/DHCP 单条下发入口。">批量下发</button>
+        {% if show_bulk_deploy %}
+          <button class="btn btn-info btn-sm" type="button" data-toast="请先选择数据；批量下发请使用 DNS/DHCP 单条下发入口。">批量下发</button>
+        {% endif %}
       </div>
     {% endif %}
   </div>

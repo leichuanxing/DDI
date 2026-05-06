@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}探测任务 #{{ probe_task.id }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260507g">{% endblock %}
+{% block extra_js %}{% if show_probe_allocate_modal %}<script src="{% static 'ipam/ipam.js' %}?v=20260507g"></script>{% endif %}{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+
+<section class="card probe-task-meta-card">
+  <div class="card-header probe-task-meta-head">
+    <h2>任务 #{{ probe_task.id }}</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ back_url }}">返回网络探测</a>
+  </div>
+  <div class="card-body probe-task-meta-grid">
+    <div><span>类型</span><strong>
+      {% if probe_task.task_type == 'network_ping_scan' %}Ping 扫描
+      {% elif probe_task.task_type == 'network_port_scan' %}端口扫描
+      {% elif probe_task.task_type == 'network_switch_arp' %}交换机 ARP 获取
+      {% else %}{{ probe_task.task_type }}{% endif %}
+    </strong></div>
+    <div><span>状态</span><strong><span class="status-badge status-{{ probe_task.status }}">{{ probe_task.get_status_display }}</span></strong></div>
+    <div><span>创建时间</span><strong>{{ probe_task.created_at|date:"Y-m-d H:i:s" }}</strong></div>
+    <div><span>创建人</span><strong>{{ probe_task.created_by.username|default:"—" }}</strong></div>
+    <div><span>开始 / 结束</span><strong>{% if probe_task.started_at %}{{ probe_task.started_at|date:"Y-m-d H:i:s" }}{% else %}—{% endif %} / {% if probe_task.finished_at %}{{ probe_task.finished_at|date:"Y-m-d H:i:s" }}{% else %}—{% endif %}</strong></div>
+    {% if probe_task.status == 'failed' %}
+    <div class="field-full"><span>失败原因</span><strong class="probe-task-error">{% firstof probe_task.error_message probe_failure_message "未记录具体说明，请查看下方任务日志；部署最新版本后重新执行可显示更详细的错误。" %}</strong></div>
+    {% endif %}
+  </div>
+</section>
+
+{% if probe_task.task_type == 'network_ping_scan' and probe_result_data.results %}
+<section class="card table-card">
+  <div class="card-header"><h2>Ping 结果</h2>{% if probe_result_data.subnet_cidr %}<span class="probe-result-sub">{{ probe_result_data.subnet_cidr }}</span>{% elif probe_ping_allocate_subnet %}<span class="probe-result-sub">{{ probe_ping_allocate_subnet.cidr }}</span>{% endif %}</div>
+  {% if is_admin and not probe_ping_allocate_subnet %}<div class="card-body probe-ping-subnet-hint-wrap"><p class="field-hint">当前探测范围内的 IP 未匹配到 IPAM 中的子网，无法在此页直接分配；请先在子网管理中维护对应网段。</p></div>{% endif %}
+  <div class="table-responsive probe-result-scroll">
+    <table class="data-table probe-result-table">
+      <thead><tr><th>IP</th><th>状态</th><th>响应时间</th><th>说明</th>{% if is_admin %}<th class="probe-result-col-actions">操作</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for row in probe_result_data.results %}
+        <tr>
+          <td><code class="probe-result-ip-code">{{ row.ip }}</code></td>
+          <td>
+            {% if row.status == 'online' %}<span class="status-badge status-success">在线</span>
+            {% elif row.status == 'offline' %}<span class="status-badge status-failed">离线</span>
+            {% else %}<span class="status-badge status-unknown">{{ row.status|default:"-" }}</span>{% endif %}
+          </td>
+          <td>{{ row.response_time|default:"-" }}</td>
+          <td class="truncate">{% if row.probe_detail %}{{ row.probe_detail }}{% else %}{{ row.error_message|default:"-" }}{% endif %}</td>
+          {% if is_admin %}
+          <td class="probe-result-actions">
+            {% if probe_ping_allocate_subnet %}
+            <button class="btn btn-soft btn-sm" type="button" data-ipam-allocate data-allocate-url="{% url 'ipam-subnet-ip-allocate' probe_ping_allocate_subnet.id %}" data-ip="{{ row.ip }}" data-subnet="{{ probe_ping_allocate_subnet.cidr }}">分配</button>
+            {% else %}
+            <span class="probe-result-action-muted">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if probe_task.task_type == 'network_port_scan' and probe_result_data.results %}
+<section class="card table-card">
+  <div class="card-header"><h2>端口结果</h2><span class="probe-result-sub">{{ probe_result_data.host }}</span></div>
+  <div class="table-responsive probe-result-scroll">
+    <table class="data-table probe-result-table">
+      <thead><tr><th>端口</th><th>状态</th><th>说明</th></tr></thead>
+      <tbody>
+        {% for row in probe_result_data.results %}
+        <tr>
+          <td>{{ row.port }}</td>
+          <td>{% if row.open %}<span class="status-badge status-success">开放</span>{% else %}<span class="status-badge status-disabled">关闭</span>{% endif %}</td>
+          <td class="truncate">{{ row.detail|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if probe_task.task_type == 'network_switch_arp' %}
+<section class="card table-card">
+  <div class="card-header">
+    <h2>IP 地址列表</h2>
+    <span class="probe-result-sub">{{ probe_result_data.switch_ip|default:"—" }} · {{ probe_result_data.parsed_count|default:0 }} 条</span>
+  </div>
+  {% if probe_arp_rows %}
+  <div class="card-body probe-arp-summary"><p>已从设备输出中解析 <strong>{{ probe_result_data.parsed_count }}</strong> 个 IPv4 地址（按地址排序）。管理员可点击「分配」将 IP 与 MAC 带入 IPAM 分配表单。</p></div>
+  {% if is_admin and probe_arp_some_without_subnet %}<div class="card-body probe-ping-subnet-hint-wrap"><p class="field-hint">部分地址未匹配到 IPAM 子网，无法使用「分配」；请先在子网管理中维护对应网段。</p></div>{% endif %}
+  <div class="table-responsive probe-result-scroll">
+    <table class="data-table probe-result-table probe-arp-ip-table">
+      <thead><tr><th>IP 地址</th><th>MAC</th>{% if is_admin %}<th class="probe-result-col-actions">操作</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for row in probe_arp_rows %}
+        <tr>
+          <td><code class="probe-result-ip-code">{{ row.ip }}</code></td>
+          <td><code>{{ row.mac }}</code></td>
+          {% if is_admin %}
+          <td class="probe-result-actions">
+            {% if row.subnet %}
+            <button class="btn btn-soft btn-sm" type="button" data-ipam-allocate data-allocate-url="{% url 'ipam-subnet-ip-allocate' row.subnet.id %}" data-ip="{{ row.ip }}" data-subnet="{{ row.subnet.cidr }}" data-mac="{{ row.mac }}">分配</button>
+            {% else %}
+            <span class="probe-result-action-muted" title="该 IP 不属于任一已录入子网">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body">
+    {% if probe_task.status == 'success' %}
+    <p class="field-hint">未解析到任何 IPv4/MAC。可能是当前 ARP 表为空，或设备输出格式与解析规则不一致；可在下方「调试输出」中对照设备回显。</p>
+    {% else %}
+    <p class="field-hint">本次任务未得到可展示的地址列表，请查看页面上方「失败原因」与下方调试输出。</p>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if probe_result_data.raw_stdout %}
+  <details class="probe-raw-details probe-raw-details-collapsed">
+    <summary>调试：设备原始输出（可选展开）</summary>
+    <pre class="probe-raw-pre probe-raw-pre-compact">{{ probe_result_data.raw_stdout }}</pre>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if probe_logs %}
+<section class="card">
+  <div class="card-header"><h2>任务日志</h2></div>
+  <ul class="probe-log-list">
+    {% for log in probe_logs %}
+    <li class="probe-log-item probe-log-{{ log.level }}">
+      <time>{{ log.created_at|date:"Y-m-d H:i:s" }}</time>
+      <span class="probe-log-level">{{ log.level }}</span>
+      <span class="probe-log-msg">{{ log.message|default:"（无文本）" }}</span>
+      {% if is_admin and log.level == 'error' and log.payload.traceback %}
+      <details class="probe-log-trace"><summary>异常详情（管理员）</summary><pre class="probe-log-trace-pre">{{ log.payload.traceback }}</pre></details>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if show_probe_allocate_modal %}
+<div class="modal-mask" hidden id="ipAllocateModal">
+  <div class="confirm-dialog allocate-dialog probe-task-allocate-dialog">
+    <h3>分配 IP</h3>
+    <form method="post" id="ipAllocateForm">
+      {% csrf_token %}
+      <input type="hidden" name="ip_address" id="allocateIpAddressHidden" value="" disabled>
+      <div class="field">
+        <label>IP 地址</label>
+        <input type="text" id="allocateIpAddress" readonly autocomplete="off">
+      </div>
+      <div class="field">
+        <label>子网</label>
+        <input type="text" id="allocateSubnet" readonly autocomplete="off">
+      </div>
+      <div class="field"><label>主机名</label><input type="text" name="hostname" autocomplete="off"></div>
+      <div class="field"><label>设备名</label><input type="text" name="device_name" autocomplete="off"></div>
+      <div class="field"><label>使用人</label><input type="text" name="owner" autocomplete="off"></div>
+      <div class="field"><label>MAC 地址</label><input type="text" name="mac_address" autocomplete="off"></div>
+      <div class="field">
+        <label>绑定方式</label>
+        <select name="bind_type">
+          <option value="manual">手动录入</option>
+          <option value="static">静态绑定</option>
+          <option value="dhcp">DHCP</option>
+        </select>
+      </div>
+      <div class="field field-full"><label>备注</label><textarea name="description" rows="2"></textarea></div>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" type="button" data-ipam-allocate-cancel>取消</button>
+        <button class="btn btn-primary" type="submit">确认分配</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

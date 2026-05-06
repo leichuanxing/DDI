@@ -1,8 +1,13 @@
 services:
   ddi-web:
-    build: .
+    build:
+      context: .
+      args:
+        DDI_VERSION: ${DDI_VERSION:-0.0.0}
     image: ddi-web:local
     container_name: ddi-web
+    env_file:
+      - version.conf
     depends_on:
       ddi-mysql:
         condition: service_healthy
@@ -35,6 +40,8 @@ services:
       - ddi_celery_queue:/app/celery_queue
     ports:
       - "8000:8000"
+    cap_add:
+      - NET_RAW
     networks: [ddi-net]
 
   ddi-mysql:
@@ -62,6 +69,8 @@ services:
   ddi-pdns:
     build:
       context: ./docker/pdns
+      args:
+        DDI_VERSION: ${DDI_VERSION:-0.0.0}
     image: ddi-pdns:local
     container_name: ddi-pdns
     depends_on:
@@ -95,6 +104,8 @@ services:
   ddi-kea:
     build:
       context: ./docker/kea
+      args:
+        DDI_VERSION: ${DDI_VERSION:-0.0.0}
     image: ddi-kea:local
     container_name: ddi-kea
     depends_on:

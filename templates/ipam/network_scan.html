@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}网络探测{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260507h">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+
+<section class="card probe-hub-card">
+  <div class="card-header probe-hub-card-header">
+    <div class="probe-hub-heading">
+      <h2>新建探测任务</h2>
+      <p class="probe-hub-sub">选择一种类型，填写参数并提交后将返回本页；任务由后台异步执行，列表中可查看状态与结果。</p>
+    </div>
+  </div>
+  <div class="card-body probe-hub-body">
+    <div class="probe-hub-grid">
+      <a class="probe-hub-tile" href="{% url 'ipam-probe-ping-new' %}">
+        <span class="probe-hub-icon" aria-hidden="true">
+          <svg viewBox="0 0 56 56" width="52" height="52" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="28" cy="28" r="7" fill="currentColor" opacity=".92"/><path d="M28 6v7M28 43v7M6 28h7M43 28h7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="28" cy="28" r="16" stroke="currentColor" stroke-width="1.5" opacity=".4"/><circle cx="28" cy="28" r="24" stroke="currentColor" stroke-width="1" opacity=".22"/><path d="M12 12l5 5M44 12l-5 5M12 44l5-5M44 44l-5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".55"/></svg>
+        </span>
+        <strong class="probe-hub-tile-title">Ping 扫描</strong>
+        <span class="probe-hub-tile-desc">ICMP 探测；容器无权限时自动尝试 TCP 可达性</span>
+        <span class="probe-hub-tile-cta">创建任务</span>
+      </a>
+      <a class="probe-hub-tile" href="{% url 'ipam-probe-port-new' %}">
+        <span class="probe-hub-icon" aria-hidden="true">
+          <svg viewBox="0 0 56 56" width="52" height="52" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="12" width="36" height="32" rx="3.5" stroke="currentColor" stroke-width="2.2"/><path d="M10 22h36M20 12V6M36 12V6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="16" y="28" width="7" height="7" rx="1.5" fill="currentColor" opacity=".38"/><rect x="25" y="28" width="7" height="7" rx="1.5" fill="currentColor" opacity=".58"/><rect x="34" y="28" width="7" height="7" rx="1.5" fill="currentColor" opacity=".38"/><rect x="16" y="37" width="7" height="5" rx="1" fill="currentColor" opacity=".22"/><rect x="25" y="37" width="7" height="5" rx="1" fill="currentColor" opacity=".42"/><rect x="34" y="37" width="7" height="5" rx="1" fill="currentColor" opacity=".22"/></svg>
+        </span>
+        <strong class="probe-hub-tile-title">端口扫描</strong>
+        <span class="probe-hub-tile-desc">对目标 IP 做 TCP 端口开放检测</span>
+        <span class="probe-hub-tile-cta">创建任务</span>
+      </a>
+      <a class="probe-hub-tile" href="{% url 'ipam-probe-arp-new' %}">
+        <span class="probe-hub-icon probe-hub-icon-arp" aria-hidden="true">
+          <svg viewBox="0 0 56 56" width="52" height="52" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="14" width="40" height="30" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 24h40M8 34h40" stroke="currentColor" stroke-width="1.5" opacity=".45"/><circle cx="18" cy="19" r="3" fill="currentColor" opacity=".85"/><path d="M26 19h18M26 29h14M26 39h20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="29" r="2.2" fill="currentColor" opacity=".5"/><circle cx="16" cy="39" r="2.2" fill="currentColor" opacity=".5"/><path d="M38 16v8l4-4-4-4zM42 36H30" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <strong class="probe-hub-tile-title">交换机 ARP</strong>
+        <span class="probe-hub-tile-desc">SSH 登录后执行命令，从输出解析 ARP（如 show ip arp）</span>
+        <span class="probe-hub-tile-cta">创建任务</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="card table-card probe-task-list-card">
+  <div class="card-header"><h2>探测任务</h2></div>
+  <div class="table-responsive">
+    <table class="data-table probe-task-table">
+      <thead>
+        <tr>
+          <th>任务</th>
+          <th>类型</th>
+          <th>状态</th>
+          <th>创建时间</th>
+          <th>创建人</th>
+          <th>完成时间</th>
+          {% if is_admin %}<th class="probe-task-col-actions">操作</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in probe_tasks %}
+        <tr class="probe-task-row" data-href="{% url 'ipam-probe-task-detail' t.id %}">
+          <td><a class="probe-task-link" href="{% url 'ipam-probe-task-detail' t.id %}">#{{ t.id }}</a></td>
+          <td>
+            {% if t.task_type == 'network_ping_scan' %}Ping 扫描
+            {% elif t.task_type == 'network_port_scan' %}端口扫描
+            {% elif t.task_type == 'network_switch_arp' %}交换机 ARP 获取
+            {% else %}{{ t.task_type }}{% endif %}
+          </td>
+          <td><span class="status-badge status-{{ t.status }}">{{ t.get_status_display }}</span></td>
+          <td>{{ t.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>{{ t.created_by.username|default:"—" }}</td>
+          <td>{% if t.finished_at %}{{ t.finished_at|date:"Y-m-d H:i:s" }}{% else %}—{% endif %}</td>
+          {% if is_admin %}
+          <td class="probe-task-row-actions" onclick="event.stopPropagation();">
+            <button type="button" class="btn btn-ghost btn-sm btn-outline-danger probe-task-delete-btn"
+              data-confirm="确认删除探测任务 #{{ t.id }} 吗？关联日志将一并删除。"
+              data-confirm-url="{% url 'ipam-probe-task-delete' t.id %}"
+              data-confirm-success="探测任务已删除">删除</button>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if is_admin %}7{% else %}6{% endif %}">{% include "components/empty_state.html" with empty_title="暂无任务" empty_text="点击上方卡片创建 Ping、端口或 ARP 探测任务。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  document.querySelectorAll(".probe-task-row[data-href]").forEach(function (row) {
+    row.addEventListener("click", function (e) {
+      if (e.target.closest("a")) return;
+      window.location.href = row.getAttribute("data-href");
+    });
+  });
+})();
+</script>
+{% endblock %}

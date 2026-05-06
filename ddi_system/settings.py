@@ -3,6 +3,29 @@ from pathlib import Path
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _ddi_version_from_conf():
+    try:
+        p = BASE_DIR / 'version.conf'
+        if not p.is_file():
+            return ''
+        for line in p.read_text(encoding='utf-8').splitlines():
+            line = line.strip()
+            if line.startswith('ddi_version='):
+                return line.split('=', 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return ''
+
+
+DDI_VERSION = (
+    os.getenv('ddi_version', '').strip()
+    or os.getenv('DDI_VERSION', '').strip()
+    or _ddi_version_from_conf()
+    or 'dev'
+)
+
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'change-me-in-production')
 DEBUG = os.getenv('DJANGO_DEBUG', 'false').lower() == 'true'
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
@@ -35,6 +58,7 @@ TEMPLATES = [{
     'OPTIONS': {'context_processors': [
         'django.template.context_processors.debug', 'django.template.context_processors.request',
         'django.contrib.auth.context_processors.auth', 'django.contrib.messages.context_processors.messages',
+        'ddi_system.context_processors.ddi_release',
     ]},
 }]
 WSGI_APPLICATION = 'ddi_system.wsgi.application'

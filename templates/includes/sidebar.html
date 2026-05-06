@@ -10,13 +10,13 @@
     <a class="side-link {% if active_menu == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}" title="系统仪表盘"><i>⌂</i><span>首页</span></a>
 
     <div class="side-group {% if active_section == 'ipam' %}open{% endif %}">
-      <button class="side-group-title" type="button"><i>▦</i><span>IPAM 管理</span><b>⌄</b></button>
+      <button class="side-group-title" type="button"><i>▦</i><span>IP 地址管理</span><b>⌄</b></button>
       <div class="side-sub">
-        <a class="{% if active_section == 'ipam' and active_menu == 'address-spaces' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'address-spaces' %}">地址空间</a>
-        <a class="{% if active_section == 'ipam' and active_menu == 'subnets' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'subnets' %}">网段管理</a>
-        <a class="{% if active_section == 'ipam' and active_menu == 'ip-addresses' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'ip-addresses' %}">IP 地址管理</a>
-        <a class="{% if active_section == 'ipam' and active_menu == 'utilization' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'utilization' %}">地址利用率</a>
-        <a class="{% if active_section == 'ipam' and active_menu == 'histories' %}active{% endif %}" href="{% url 'web-list' 'ipam' 'histories' %}">IP 使用历史</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'regions' %}active{% endif %}" href="{% url 'ipam-region-list' %}">区域管理</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'vlans' %}active{% endif %}" href="{% url 'ipam-vlan-list' %}">VLAN 管理</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'subnets' %}active{% endif %}" href="{% url 'ipam-subnet-list' %}">子网管理</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'ips' %}active{% endif %}" href="{% url 'ipam-ip-list' %}">IP 地址</a>
+        <a class="{% if active_section == 'ipam' and active_menu == 'network-scan' %}active{% endif %}" href="{% url 'ipam-network-scan' %}">网络探测</a>
       </div>
     </div>
 
@@ -75,4 +75,5 @@
       </div>
     </div>
   </nav>
+  <p class="sidebar-version" title="发布版本">v{{ ddi_version }}</p>
 </aside>

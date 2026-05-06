@@ -1,5 +1,8 @@
 FROM debian:bookworm-slim
 
+ARG DDI_VERSION=0.0.0
+LABEL org.opencontainers.image.version=$DDI_VERSION
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \

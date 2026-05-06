@@ -2,6 +2,8 @@ services:
   ddi-web:
     image: ddi-web:local
     container_name: ddi-web
+    env_file:
+      - version.conf
     depends_on:
       ddi-mysql:
         condition: service_healthy
@@ -33,6 +35,8 @@ services:
       - ddi_celery_queue:/app/celery_queue
     ports:
       - "8000:8000"
+    cap_add:
+      - NET_RAW
     networks: [ddi-net]
 
   ddi-mysql:

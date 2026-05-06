@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}子网管理{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260506b">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" %}
+<form method="get" class="card search-panel ipam-search-panel subnet-filter-panel">
+  <div class="field field-grow">
+    <label for="keyword">搜索</label>
+    <input id="keyword" type="text" name="keyword" value="{{ keyword }}" placeholder="搜索子网名称或CIDR...">
+  </div>
+  <div class="field">
+    <label for="region">区域</label>
+    <select id="region" name="region">
+      <option value="">全部区域</option>
+      {% for region in regions %}
+      <option value="{{ region.id }}" {% if region_id == region.id|stringformat:"s" %}selected{% endif %}>{{ region.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-primary" type="submit">搜索</button>
+  <a class="btn btn-ghost" href="{% url 'ipam-subnet-list' %}">重置</a>
+</form>
+<section class="subnet-grid">
+  {% for subnet in subnets %}
+  <article class="card subnet-card">
+    <div class="subnet-card-header">
+      <div>
+        <h3>{{ subnet.name }}</h3>
+        <div class="subnet-meta">{{ subnet.cidr }}</div>
+      </div>
+      <span class="status-badge status-warning">{{ subnet.usage|default:"其他" }}</span>
+    </div>
+    <div class="subnet-info-grid">
+      <div><span>网关</span><strong>{{ subnet.gateway|default:"-" }}</strong></div>
+      <div><span>区域</span><strong>{{ subnet.region.name|default:"-" }}</strong></div>
+      <div><span>VLAN</span><strong>{% if subnet.vlan %}{{ subnet.vlan.name }} ({{ subnet.vlan.vlan_id }}){% else %}-{% endif %}</strong></div>
+      <div><span>使用率</span><strong>{{ subnet.utilization_rate }}%</strong></div>
+    </div>
+    <div class="subnet-progress">
+      <div class="progress {% if subnet.utilization_rate >= 90 %}danger{% elif subnet.utilization_rate >= 70 %}warn{% endif %}"><span style="width: {{ subnet.utilization_rate }}%"></span></div>
+      <div class="subnet-meta">{{ subnet.used_ips }}/{{ subnet.total_ips }}</div>
+    </div>
+    <div class="row-actions">
+      <a class="btn btn-ghost btn-sm" href="{% url 'ipam-subnet-detail' subnet.id %}">查看详情</a>
+      {% if is_admin %}
+      <button class="btn btn-soft btn-sm" type="button" data-action-url="{% url 'ipam-subnet-generate-ips' subnet.id %}" data-action-success="IP 地址已生成">生成 IP</button>
+      <a class="btn btn-ghost btn-sm" href="{% url 'ipam-subnet-edit' subnet.id %}">编辑</a>
+      <button class="btn btn-ghost btn-sm btn-outline-danger" type="button" data-confirm="确认删除子网 {{ subnet.cidr }} 吗？关联 IP 会一并删除。" data-confirm-url="{% url 'ipam-subnet-delete' subnet.id %}" data-confirm-success="子网已删除">删除</button>
+      {% endif %}
+    </div>
+  </article>
+  {% empty %}
+  <div class="card">{% include "components/empty_state.html" with empty_title="暂无子网" empty_text="请先创建区域和 VLAN，再录入子网。" %}</div>
+  {% endfor %}
+</section>
+{% endblock %}

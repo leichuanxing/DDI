@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}VLAN 管理{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260506b">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" %}
+<section class="card table-card">
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>VLAN ID</th>
+          <th>VLAN 名称</th>
+          <th>所属区域</th>
+          <th>用途</th>
+          <th>网关</th>
+          <th>子网数</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vlan in vlans %}
+        <tr>
+          <td><span class="vlan-id">{{ vlan.vlan_id }}</span></td>
+          <td><strong>{{ vlan.name }}</strong></td>
+          <td>{{ vlan.region.name }}</td>
+          <td>{{ vlan.usage|default:"-" }}</td>
+          <td>{{ vlan.gateway|default:"-" }}</td>
+          <td><span class="status-badge status-used">{{ vlan.subnet_count }}</span></td>
+          <td>
+            <div class="row-actions">
+              {% if is_admin %}
+              <a class="btn btn-ghost btn-sm" href="{% url 'ipam-vlan-edit' vlan.id %}">编辑</a>
+              <button class="btn btn-ghost btn-sm btn-outline-danger" type="button" data-confirm="确认删除 VLAN {{ vlan.vlan_id }} 吗？" data-confirm-url="{% url 'ipam-vlan-delete' vlan.id %}" data-confirm-success="VLAN 已删除">删除</button>
+              {% else %}
+              <span class="status-badge status-disabled">只读</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7">{% include "components/empty_state.html" with empty_title="暂无 VLAN" empty_text="请先创建区域，再补充 VLAN 信息。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

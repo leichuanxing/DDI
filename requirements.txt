@@ -11,3 +11,4 @@ gunicorn>=22.0
 openpyxl>=3.1
 python-dotenv>=1.0
 whitenoise>=6.7
+paramiko>=3.4,<4.0

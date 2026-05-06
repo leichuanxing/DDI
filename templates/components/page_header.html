@@ -5,17 +5,5 @@
   </div>
   <div class="page-actions">
     {% if primary_action and create_url %}<a class="btn btn-primary" href="{{ create_url }}">{{ primary_action }}</a>{% elif primary_action %}<button class="btn btn-primary" type="button" data-toast="该页面暂未配置新增入口。">{{ primary_action }}</button>{% endif %}
-    {% if show_import_export %}
-      {% if import_url %}
-        <a class="btn btn-soft" href="{{ import_url }}">导入</a>
-      {% else %}
-        <button class="btn btn-soft" type="button" data-toast="该页面暂未配置导入入口。">导入</button>
-      {% endif %}
-      {% if export_url %}
-        <a class="btn btn-soft" href="{{ export_url }}">导出</a>
-      {% else %}
-        <button class="btn btn-soft" type="button" data-toast="该页面暂未配置导出入口。">导出</button>
-      {% endif %}
-    {% endif %}
   </div>
 </div>

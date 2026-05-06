@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}编辑 IP{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260506b">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+<form method="post" class="card form-card">
+  {% csrf_token %}
+  <div class="card-header"><h2>编辑 IP</h2></div>
+  <div class="card-body">
+    <div class="field">
+      <label>IP 地址</label>
+      <input type="text" value="{{ ip_obj.ip_address }}" readonly>
+    </div>
+    <div class="field">
+      <label>所属子网</label>
+      <input type="text" value="{{ ip_obj.subnet.cidr }}" readonly>
+    </div>
+    {% for field in form %}
+    <div class="field {% if field.name == 'description' %}field-full{% endif %}">
+      <label {% if field.field.required %}class="required"{% endif %} for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  <div class="form-footer">
+    <a class="btn btn-ghost" href="{{ back_url }}">取消</a>
+    <button class="btn btn-primary" type="submit">{{ submit_text }}</button>
+  </div>
+</form>
+{% endblock %}

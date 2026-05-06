@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}IP 地址{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260506h">{% endblock %}
+{% block extra_js %}<script src="{% static 'ipam/ipam.js' %}?v=20260506f"></script>{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+<form method="get" class="card search-panel ipam-search-panel ip-list-search-panel">
+  <div class="field field-grow">
+    <label for="keyword">搜索</label>
+    <input id="keyword" type="text" name="keyword" value="{{ keyword }}" placeholder="IP、主机名、MAC、设备名…">
+  </div>
+  <div class="field">
+    <label for="status">状态</label>
+    <select id="status" name="status">
+      <option value="">全部</option>
+      {% for value, label in status_choices %}
+      <option value="{{ value }}" {% if status_value == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="subnet">子网</label>
+    <select id="subnet" name="subnet">
+      <option value="">全部</option>
+      {% for subnet in subnets %}
+      <option value="{{ subnet.id }}" {% if subnet_id == subnet.id|stringformat:"s" %}selected{% endif %}>{{ subnet.cidr }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="{% url 'ipam-ip-list' %}">重置</a>
+</form>
+<section class="card table-card ip-list-table-card">
+  <div class="table-responsive ip-list-table-wrap">
+    <table class="data-table ip-list-table">
+      <thead>
+        <tr>
+          <th class="ip-list-col-ip">IP</th>
+          <th class="ip-list-col-subnet">子网</th>
+          <th>状态</th>
+          <th>主机名</th>
+          <th>设备名</th>
+          <th>使用人</th>
+          <th class="ip-list-col-mac">MAC</th>
+          <th>绑定方式</th>
+          <th class="ip-list-col-time">更新时间</th>
+          <th class="ip-list-col-actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ip in page_obj.object_list %}
+        <tr>
+          <td class="ip-list-col-ip"><code class="ip-list-ip-code">{{ ip.ip_address }}</code></td>
+          <td class="ip-list-col-subnet">{{ ip.subnet.cidr }}</td>
+          <td><span class="status-badge status-{{ ip.status }}">{{ ip.get_status_display }}</span></td>
+          <td>{{ ip.hostname|default:"-" }}</td>
+          <td>{{ ip.device_name|default:"-" }}</td>
+          <td>{{ ip.owner|default:"-" }}</td>
+          <td class="ip-list-col-mac">{{ ip.mac_address|default:"-" }}</td>
+          <td>{{ ip.get_bind_type_display|default:"-" }}</td>
+          <td class="ip-list-col-time">{{ ip.updated_at|date:"Y-m-d H:i" }}</td>
+          <td class="ip-list-actions">
+            <div class="row-actions ip-list-row-actions">
+              {% if ip.status == 'available' %}
+                {% if is_admin %}
+                <button class="btn btn-soft btn-sm" type="button" data-ipam-allocate data-id="{{ ip.id }}" data-ip="{{ ip.ip_address }}" data-subnet="{{ ip.subnet.cidr }}">分配</button>
+                <a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.id %}">编辑</a>
+                {% endif %}
+              {% elif ip.status == 'used' %}
+                {% if is_admin %}
+                <a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.id %}">编辑</a>
+                <button class="btn btn-ghost btn-sm" type="button" data-confirm="确认释放 {{ ip.ip_address }} 吗？" data-confirm-url="{% url 'ipam-ip-release' ip.id %}" data-confirm-success="IP 已释放">释放</button>
+                {% endif %}
+              {% elif ip.status == 'gateway' %}
+                <a class="btn btn-ghost btn-sm" href="{% url 'ipam-subnet-detail' ip.subnet.id %}">查看</a>
+                {% if is_admin %}<a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.id %}">编辑</a>{% endif %}
+              {% elif ip.status == 'disabled' %}
+                {% if is_admin %}<a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.id %}">编辑</a>{% endif %}
+              {% else %}
+                {% if is_admin %}<a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-edit' ip.id %}">编辑</a>{% endif %}
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10">{% include "components/empty_state.html" with empty_title="暂无 IP 地址" empty_text="请先在子网管理中生成 IP 地址。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination-bar">
+    <span>共 {{ page_obj.paginator.count }} 条</span>
+    <div class="row-actions">
+      {% if page_obj.has_previous %}<a class="btn btn-ghost btn-sm" href="?page={{ page_obj.previous_page_number }}&keyword={{ keyword }}&status={{ status_value }}&subnet={{ subnet_id }}">上一页</a>{% endif %}
+      {% if page_obj.has_next %}<a class="btn btn-ghost btn-sm" href="?page={{ page_obj.next_page_number }}&keyword={{ keyword }}&status={{ status_value }}&subnet={{ subnet_id }}">下一页</a>{% endif %}
+    </div>
+  </div>
+</section>
+
+<div class="modal-mask" hidden id="ipAllocateModal">
+  <div class="confirm-dialog allocate-dialog">
+    <h3>分配 IP</h3>
+    <form method="post" id="ipAllocateForm">
+      {% csrf_token %}
+      <input type="hidden" name="ip_address" id="allocateIpAddressHidden" value="" disabled>
+      <div class="field">
+        <label>IP 地址</label>
+        <input type="text" id="allocateIpAddress" readonly>
+      </div>
+      <div class="field">
+        <label>子网</label>
+        <input type="text" id="allocateSubnet" readonly>
+      </div>
+      <div class="field"><label>主机名</label><input type="text" name="hostname"></div>
+      <div class="field"><label>设备名</label><input type="text" name="device_name"></div>
+      <div class="field"><label>使用人</label><input type="text" name="owner"></div>
+      <div class="field"><label>MAC 地址</label><input type="text" name="mac_address"></div>
+      <div class="field">
+        <label>绑定方式</label>
+        <select name="bind_type">
+          <option value="manual">手动录入</option>
+          <option value="static">静态绑定</option>
+          <option value="dhcp">DHCP</option>
+        </select>
+      </div>
+      <div class="field field-full"><label>备注</label><textarea name="description"></textarea></div>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" type="button" data-ipam-allocate-cancel>取消</button>
+        <button class="btn btn-primary" type="submit">确认分配</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -10,6 +10,7 @@ from django.db.models import Count, Q
 from django.forms import modelform_factory
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from rest_framework.decorators import api_view
@@ -414,6 +415,47 @@ def row_urls(section, page, obj_id):
     return api_url, delete_url, deploy_url, edit_url
 
 
+def _latest_health_by_name(limit=100):
+    latest = {}
+    for row in ServiceHealthCheck.objects.order_by('-checked_at')[:limit]:
+        if row.service_name not in latest:
+            latest[row.service_name] = row
+    return latest
+
+
+def _aggregate_health_status(rows):
+    if not rows:
+        return 'unknown', status_label('unknown')
+    statuses = [r.status for r in rows]
+    if 'abnormal' in statuses:
+        return 'abnormal', status_label('abnormal')
+    if 'unknown' in statuses:
+        return 'unknown', status_label('unknown')
+    return 'normal', status_label('normal')
+
+
+def _ordered_health_rows(latest_map, limit=8):
+    priority = [
+        'ddi-web',
+        'ddi-web -> ddi-mysql',
+        'ddi-web -> ddi-pdns API',
+        'ddi-web -> ddi-kea API',
+        'ddi-pdns -> ddi-mysql',
+        'ddi-kea -> ddi-mysql',
+    ]
+    ordered = []
+    seen = set()
+    for name in priority:
+        row = latest_map.get(name)
+        if row:
+            ordered.append(row)
+            seen.add(name)
+    for name in sorted(latest_map.keys()):
+        if name not in seen:
+            ordered.append(latest_map[name])
+    return ordered[:limit]
+
+
 @login_required
 def dashboard(request):
     total_ips = IPAddress.objects.count()
@@ -421,8 +463,12 @@ def dashboard(request):
     allocated_ips = IPAddress.objects.filter(status__in=['used', 'dhcp_dynamic', 'dhcp_reserved']).count()
     reserved_ips = IPAddress.objects.filter(status='reserved').count()
     disabled_ips = IPAddress.objects.filter(status='disabled').count()
-    recent_changes = DNSChangeLog.objects.filter(created_at__gte=timezone.now() - timedelta(hours=24)).count()
-
+    subnet_model_count = Subnet.objects.count()
+    dns_zone_count = DNSZone.objects.count()
+    dns_record_count = DNSRecord.objects.count()
+    dns_changes_24h = DNSChangeLog.objects.filter(created_at__gte=timezone.now() - timedelta(hours=24)).count()
+    dhcp_subnet_count = DHCPSubnet.objects.count()
+    dhcp_pool_count = DHCPPool.objects.count()
     subnet_labels, subnet_usage = [], []
     for subnet in Subnet.objects.all()[:10]:
         total = subnet.ip_addresses.count()
@@ -441,8 +487,8 @@ def dashboard(request):
         lease_labels.append(day.strftime('%m-%d'))
         lease_values.append(DHCPLease.objects.filter(created_at__date__lte=day).count())
 
-    services = list(ServiceHealthCheck.objects.all()[:8])
-    if not services:
+    latest_health = _latest_health_by_name()
+    if not latest_health:
         services = [
             {'service_name': 'ddi-web', 'status': 'unknown', 'status_label': '未知', 'ip_address': None, 'port': 8000, 'checked_at': None, 'response_time_ms': None},
             {'service_name': 'ddi-mysql', 'status': 'unknown', 'status_label': '未知', 'ip_address': None, 'port': 3306, 'checked_at': None, 'response_time_ms': None},
@@ -450,40 +496,90 @@ def dashboard(request):
             {'service_name': 'ddi-kea', 'status': 'unknown', 'status_label': '未知', 'ip_address': None, 'port': 8000, 'checked_at': None, 'response_time_ms': None},
         ]
     else:
+        services = _ordered_health_rows(latest_health, 8)
         for service in services:
             service.status_label = status_label(service.status)
+    lease_count = DHCPLease.objects.count()
 
-    recent_tasks = list(SystemTask.objects.all()[:10])
-    for task in recent_tasks:
-        task.status_label = status_label(task.status)
+    def _ipam_health_pred(name):
+        n = name.lower()
+        if 'pdns' in n or 'kea' in n:
+            return False
+        return name == 'ddi-web' or 'mysql' in n
+
+    ipam_h = _aggregate_health_status([r for n, r in latest_health.items() if _ipam_health_pred(n)])
+    dns_h = _aggregate_health_status([r for n, r in latest_health.items() if 'pdns' in n.lower()])
+    dhcp_h = _aggregate_health_status([r for n, r in latest_health.items() if 'kea' in n.lower()])
+
+    dashboard_modules = [
+        {
+            'key': 'ipam',
+            'title': 'IP 地址管理',
+            'subtitle': 'IPAM',
+            'status': ipam_h[0],
+            'status_label': ipam_h[1],
+            'url': reverse('ipam-ip-list'),
+            'metrics': [
+                {'label': '子网', 'value': subnet_model_count, 'url': reverse('ipam-subnet-list')},
+                {'label': 'IP 总数', 'value': total_ips, 'url': reverse('ipam-ip-list')},
+                {'label': '已使用', 'value': allocated_ips, 'url': reverse('ipam-ip-list')},
+                {'label': '可用', 'value': available_ips, 'url': reverse('ipam-ip-list') + '?status=available'},
+            ],
+        },
+        {
+            'key': 'dns',
+            'title': 'DNS 管理',
+            'subtitle': 'PowerDNS',
+            'status': dns_h[0],
+            'status_label': dns_h[1],
+            'url': reverse('web-list', kwargs={'section': 'dns', 'page': 'zones'}),
+            'metrics': [
+                {'label': 'Zone', 'value': dns_zone_count, 'url': reverse('web-list', kwargs={'section': 'dns', 'page': 'zones'})},
+                {'label': '记录', 'value': dns_record_count, 'url': reverse('web-list', kwargs={'section': 'dns', 'page': 'records'})},
+                {'label': '24h 变更', 'value': dns_changes_24h, 'url': reverse('web-list', kwargs={'section': 'dns', 'page': 'change-logs'})},
+            ],
+        },
+        {
+            'key': 'dhcp',
+            'title': 'DHCP 管理',
+            'subtitle': 'Kea',
+            'status': dhcp_h[0],
+            'status_label': dhcp_h[1],
+            'url': reverse('web-list', kwargs={'section': 'dhcp', 'page': 'pools'}),
+            'metrics': [
+                {'label': '子网', 'value': dhcp_subnet_count, 'url': reverse('web-list', kwargs={'section': 'dhcp', 'page': 'subnets'})},
+                {'label': '地址池', 'value': dhcp_pool_count, 'url': reverse('web-list', kwargs={'section': 'dhcp', 'page': 'pools'})},
+                {'label': '当前租约', 'value': lease_count, 'url': reverse('web-list', kwargs={'section': 'dhcp', 'page': 'leases'})},
+            ],
+        },
+    ]
 
     context = {
         'section_title': '首页',
         'page_title': '首页仪表盘',
-        'page_description': '集中查看 IPAM、DNS、DHCP、任务和审计的运行态势。',
+        'page_description': '模块资源与健康一览；探测项为各组件最新一次检测结果。',
         'active_menu': 'dashboard',
-        'stat_cards': [
-            {'label': 'IP 地址总数', 'value': total_ips, 'trend': '全局纳管地址', 'icon': 'IP', 'color': ''},
-            {'label': '已使用 IP 数', 'value': allocated_ips, 'trend': '含静态与 DHCP 分配', 'icon': '↗', 'color': 'stat-green'},
-            {'label': '可用 IP 数', 'value': available_ips, 'trend': '可继续分配', 'icon': '✓', 'color': 'stat-cyan'},
-            {'label': 'DHCP 地址池数量', 'value': DHCPPool.objects.count(), 'trend': 'Kea 地址池', 'icon': '⇄', 'color': 'stat-orange'},
-            {'label': 'DNS Zone 数量', 'value': DNSZone.objects.count(), 'trend': 'PowerDNS Zone', 'icon': 'Z', 'color': 'stat-purple'},
-            {'label': 'DNS 记录数量', 'value': DNSRecord.objects.count(), 'trend': '全部解析记录', 'icon': 'R', 'color': ''},
-            {'label': '当前 DHCP 租约数量', 'value': DHCPLease.objects.count(), 'trend': '当前租约快照', 'icon': 'L', 'color': 'stat-green'},
-            {'label': '24 小时配置变更', 'value': recent_changes, 'trend': '最近 DNS 配置变更', 'icon': '!', 'color': 'stat-red'},
+        'dashboard_nav_pills': [
+            {'label': 'IP 地址', 'url': reverse('ipam-ip-list')},
+            {'label': '子网', 'url': reverse('ipam-subnet-list')},
+            {'label': '网络探测', 'url': reverse('ipam-network-scan')},
+            {'label': '健康检查', 'url': reverse('web-list', kwargs={'section': 'system', 'page': 'health'})},
+            {'label': 'DNS', 'url': reverse('web-list', kwargs={'section': 'dns', 'page': 'zones'})},
+            {'label': 'DHCP', 'url': reverse('web-list', kwargs={'section': 'dhcp', 'page': 'pools'})},
+            {'label': '审计', 'url': reverse('web-list', kwargs={'section': 'audit', 'page': 'operations'})},
         ],
+        'dashboard_modules': dashboard_modules,
         'services': services,
-        'recent_tasks': recent_tasks,
         'stats': {
             'ip_total': total_ips,
             'ip_allocated': allocated_ips,
             'ip_available': available_ips,
             'ip_reserved': reserved_ips,
             'ip_conflict': 0,
-            'subnet_count': IPAddress.objects.values('subnet').distinct().count(),
-            'dns_record_count': DNSRecord.objects.count(),
-            'dhcp_pool_count': DHCPPool.objects.count(),
-            'active_lease_count': DHCPLease.objects.count(),
+            'subnet_count': subnet_model_count,
+            'dns_record_count': dns_record_count,
+            'dhcp_pool_count': dhcp_pool_count,
+            'active_lease_count': lease_count,
             'device_count': 0,
             'disabled_ips': disabled_ips,
         },
@@ -495,7 +591,6 @@ def dashboard(request):
             'lease_labels': lease_labels,
             'lease_values': lease_values,
         },
-        'recent_audit_logs': AuditLog.objects.all()[:10],
         'now_label': request.user.last_login,
     }
     return render(request, 'dashboard/index.html', context)
@@ -663,6 +758,17 @@ def dns_service_page(request):
 
 @login_required
 def web_list(request, section, page):
+    if section == 'ipam':
+        redirect_map = {
+            'address-spaces': 'ipam-region-list',
+            'subnets': 'ipam-subnet-list',
+            'ip-addresses': 'ipam-ip-list',
+            'utilization': 'ipam-subnet-list',
+            'histories': 'ipam-network-scan',
+        }
+        target = redirect_map.get(page)
+        if target:
+            return redirect(target)
     if section == 'linkage':
         raise Http404('联动管理功能已移除')
     if (section, page) == ('dns', 'service'):
@@ -1007,17 +1113,24 @@ def web_list(request, section, page):
         'columns': columns,
         'rows': rows,
         'total_count': total,
-        'export_url': EXPORT_URLS.get((section, page), ''),
-        'import_url': IMPORT_URLS.get((section, page), ''),
         'bulk_delete_url': '/api/dns/records/bulk-delete/' if (section, page) == ('dns', 'records') else '',
         'create_url': f'/ui/{section}/{page}/new/' if (section, page) in FORM_FIELDS else '',
-        'show_import_export': (section, page) not in {('dns', 'service'), ('dhcp', 'service')},
         'show_bulk_actions': (section, page) not in {('dns', 'service'), ('dhcp', 'service')},
+        'show_bulk_deploy': section != 'ipam',
     })
 
 
 @login_required
 def web_create(request, section, page):
+    if section == 'ipam':
+        redirect_map = {
+            'address-spaces': 'ipam-region-add',
+            'subnets': 'ipam-subnet-add',
+            'ip-addresses': 'ipam-ip-list',
+        }
+        target = redirect_map.get(page)
+        if target:
+            return redirect(target)
     if section == 'linkage':
         raise Http404('联动管理功能已移除')
     if (section, page) == ('dns', 'records'):
@@ -1060,6 +1173,15 @@ def web_create(request, section, page):
 
 @login_required
 def web_edit(request, section, page, pk):
+    if section == 'ipam':
+        redirect_map = {
+            'address-spaces': ('ipam-region-edit', pk),
+            'subnets': ('ipam-subnet-edit', pk),
+            'ip-addresses': ('ipam-ip-edit', pk),
+        }
+        target = redirect_map.get(page)
+        if target:
+            return redirect(target[0], pk=target[1])
     if section == 'linkage':
         raise Http404('联动管理功能已移除')
     if (section, page) == ('dns', 'records'):

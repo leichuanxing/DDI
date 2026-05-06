@@ -1,5 +1,8 @@
 FROM powerdns/pdns-auth-48:latest
 
+ARG DDI_VERSION=0.0.0
+LABEL org.opencontainers.image.version=$DDI_VERSION
+
 USER root
 
 RUN apt-get update \

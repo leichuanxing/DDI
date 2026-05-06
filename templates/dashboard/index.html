@@ -1,126 +1,120 @@
 {% extends "base.html" %}
 {% block title %}系统仪表盘{% endblock %}
 {% block content %}
+<div class="dashboard-page dashboard-page--v2">
 {% include "components/page_header.html" %}
 
-<section class="stat-grid">
-  {% for item in stat_cards %}
-  <article class="stat-card {{ item.color }}">
-    <div>
-      <div class="label">{{ item.label }}</div>
-      <div class="value">{{ item.value }}</div>
-      <div class="trend">{{ item.trend }}</div>
-    </div>
-    <div class="stat-icon">{{ item.icon }}</div>
+<nav class="dashboard-nav-pills" aria-label="快捷入口">
+  {% for link in dashboard_nav_pills %}
+  <a class="dashboard-nav-pill" href="{{ link.url }}">{{ link.label }}</a>
+  {% endfor %}
+</nav>
+
+<section class="dashboard-modules" aria-label="各模块概览">
+  {% for m in dashboard_modules %}
+  <article class="dashboard-module-card dashboard-module-card--{{ m.key }}">
+    <header class="dashboard-module-card-head">
+      <div>
+        <h2 class="dashboard-module-title"><a href="{{ m.url }}">{{ m.title }}</a></h2>
+        <p class="dashboard-module-sub">{{ m.subtitle }}</p>
+      </div>
+      {% include "components/status_badge.html" with status=m.status label=m.status_label %}
+    </header>
+    <ul class="dashboard-module-metrics dashboard-module-metrics--grid">
+      {% for line in m.metrics %}
+      <li><a href="{{ line.url }}"><span class="dashboard-module-metric-label">{{ line.label }}</span><span class="dashboard-module-metric-value">{{ line.value }}</span></a></li>
+      {% endfor %}
+    </ul>
   </article>
   {% endfor %}
 </section>
 
-<section class="dashboard-grid">
-  <div class="card">
-    <div class="card-header"><h2>服务状态</h2><button class="btn btn-soft btn-sm" type="button" data-health-check-url="{% url 'check-now' %}">立即检测</button></div>
-    <div class="card-body">
-      <div class="service-list">
+<section class="dashboard-grid dashboard-grid--main dashboard-grid--balanced">
+  <div class="card dashboard-service-card">
+    <div class="card-header dashboard-card-header-row">
+      <h2>组件探测</h2>
+      <div class="dashboard-card-header-actions">
+        <a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'system' 'health' %}">全部</a>
+        <button class="btn btn-soft btn-sm" type="button" data-health-check-url="{% url 'check-now' %}">检测</button>
+      </div>
+    </div>
+    <div class="card-body card-body--tight">
+      <div class="service-health-grid">
         {% for service in services %}
-        <article class="service-card">
-          <div>
-            <strong>{{ service.service_name }}</strong>
-            <div class="service-meta">{{ service.ip_address|default:"-" }}{% if service.port %}:{{ service.port }}{% endif %} · 最近检测 {{ service.checked_at|date:"Y-m-d H:i"|default:"-" }}</div>
-          </div>
-          <div>
+        <div class="service-health-cell" title="{{ service.service_name }}">
+          <div class="service-health-cell-top">
+            <span class="service-health-name">{{ service.service_name }}</span>
             {% include "components/status_badge.html" with status=service.status label=service.status_label %}
-            <div class="service-meta">{{ service.response_time_ms|default:"-" }} ms</div>
           </div>
-        </article>
+          <div class="service-health-cell-foot">
+            <span class="service-health-time">{{ service.checked_at|date:"m-d H:i"|default:"未检测" }}</span>
+            <span class="service-health-ms">{{ service.response_time_ms|default:"—" }} ms</span>
+          </div>
+        </div>
         {% empty %}
-        {% include "components/empty_state.html" with empty_title="暂无服务检测数据" empty_text="系统会在健康检查后展示 ddi-web、ddi-mysql、ddi-pdns、ddi-kea 状态。" %}
+        <div class="service-health-empty">{% include "components/empty_state.html" with empty_title="暂无检测数据" empty_text="点击「检测」拉取组件状态。" %}</div>
         {% endfor %}
       </div>
     </div>
   </div>
-  <div class="card chart-box">
-    <div class="card-header"><h2>各网段地址利用率</h2></div>
-    <div class="card-body"><canvas id="subnetUsageChart"></canvas></div>
+  <div class="card chart-box chart-box--dashboard chart-box--balanced">
+    <div class="card-header"><h2>网段利用率</h2><a class="btn btn-ghost btn-sm" href="{% url 'ipam-subnet-list' %}">子网</a></div>
+    <div class="card-body card-body--chart"><canvas id="subnetUsageChart"></canvas></div>
   </div>
 </section>
 
-<section class="chart-grid">
-  <div class="card chart-box">
-    <div class="card-header"><h2>IP 状态分布</h2></div>
-    <div class="card-body"><canvas id="ipStatusChart"></canvas></div>
-  </div>
-  <div class="card chart-box">
-    <div class="card-header"><h2>最近 7 天租约变化</h2></div>
-    <div class="card-body"><canvas id="leaseTrendChart"></canvas></div>
-  </div>
-</section>
-
-<section class="dashboard-grid">
-  <div class="card table-card">
-    <div class="card-header"><h2>最近任务</h2><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'tasks' 'list' %}">查看全部</a></div>
-    <div class="table-responsive">
-      <table class="data-table">
-        <thead><tr><th>任务名称</th><th>目标服务</th><th>状态</th><th>开始时间</th><th>完成时间</th><th>操作</th></tr></thead>
-        <tbody>
-          {% for task in recent_tasks %}
-          <tr>
-            <td class="truncate">{{ task.task_type }}</td>
-            <td>{{ task.target_service }}</td>
-            <td>{% include "components/status_badge.html" with status=task.status label=task.status_label %}</td>
-            <td>{{ task.started_at|date:"m-d H:i"|default:"-" }}</td>
-            <td>{{ task.finished_at|date:"m-d H:i"|default:"-" }}</td>
-            <td><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'tasks' 'logs' %}">日志</a></td>
-          </tr>
-          {% empty %}<tr><td colspan="6">{% include "components/empty_state.html" with empty_title="暂无任务" %}</td></tr>{% endfor %}
-        </tbody>
-      </table>
+<details class="dashboard-details-more" id="dashboardChartsExtra">
+  <summary>更多图表：IP 状态分布、租约趋势</summary>
+  <div class="chart-grid chart-grid--dashboard chart-grid--in-details">
+    <div class="card chart-box chart-box--dashboard">
+      <div class="card-header"><h2>IP 状态分布</h2><a class="btn btn-ghost btn-sm" href="{% url 'ipam-ip-list' %}">IP 列表</a></div>
+      <div class="card-body card-body--chart"><canvas id="ipStatusChart"></canvas></div>
+    </div>
+    <div class="card chart-box chart-box--dashboard">
+      <div class="card-header"><h2>最近 7 天租约</h2><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'dhcp' 'leases' %}">租约</a></div>
+      <div class="card-body card-body--chart"><canvas id="leaseTrendChart"></canvas></div>
     </div>
   </div>
-  <div class="card table-card">
-    <div class="card-header"><h2>最近审计日志</h2><a class="btn btn-ghost btn-sm" href="{% url 'web-list' 'audit' 'operations' %}">查看全部</a></div>
-    <div class="table-responsive">
-      <table class="data-table">
-        <thead><tr><th>操作人</th><th>模块</th><th>动作</th><th>对象</th><th>结果</th><th>时间</th></tr></thead>
-        <tbody>
-          {% for log in recent_audit_logs %}
-          <tr>
-            <td>{{ log.username|default:"-" }}</td>
-            <td>{{ log.module }}</td>
-            <td>{{ log.action }}</td>
-            <td class="truncate">{{ log.object_name|default:log.object_type|default:"-" }}</td>
-            <td>{% include "components/status_badge.html" with status=log.result label=log.result %}</td>
-            <td>{{ log.created_at|date:"m-d H:i" }}</td>
-          </tr>
-          {% empty %}<tr><td colspan="6">{% include "components/empty_state.html" with empty_title="暂无审计日志" %}</td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
+</details>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 {{ chart_data|json_script:"dashboard-chart-data" }}
 <script>
-  const chartData = JSON.parse(document.getElementById("dashboard-chart-data").textContent);
-  const grid = { color: "#e5e7eb" };
-  if (window.Chart) {
+  (function () {
+    const chartData = JSON.parse(document.getElementById("dashboard-chart-data").textContent);
+    const grid = { color: "#e5e7eb" };
+    if (!window.Chart) return;
+
     new Chart(document.getElementById("subnetUsageChart"), {
       type: "bar",
       data: { labels: chartData.subnet_labels, datasets: [{ label: "利用率", data: chartData.subnet_usage, backgroundColor: "#2563EB", borderRadius: 6 }] },
       options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100, grid } }, plugins: { legend: { display: false } } }
     });
-    new Chart(document.getElementById("ipStatusChart"), {
-      type: "doughnut",
-      data: { labels: chartData.status_labels, datasets: [{ data: chartData.status_values, backgroundColor: ["#16A34A","#2563EB","#7C3AED","#0891B2","#EA580C","#6B7280","#DC2626"] }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
-    });
-    new Chart(document.getElementById("leaseTrendChart"), {
-      type: "line",
-      data: { labels: chartData.lease_labels, datasets: [{ label: "租约数", data: chartData.lease_values, borderColor: "#0891B2", backgroundColor: "rgba(8,145,178,.12)", tension: .35, fill: true }] },
-      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid } }, plugins: { legend: { display: false } } }
-    });
-  }
+
+    const details = document.getElementById("dashboardChartsExtra");
+    let extraReady = false;
+    function initExtraCharts() {
+      if (extraReady) return;
+      extraReady = true;
+      new Chart(document.getElementById("ipStatusChart"), {
+        type: "doughnut",
+        data: { labels: chartData.status_labels, datasets: [{ data: chartData.status_values, backgroundColor: ["#16A34A","#2563EB","#7C3AED","#0891B2","#EA580C","#6B7280","#DC2626"] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } } } }
+      });
+      new Chart(document.getElementById("leaseTrendChart"), {
+        type: "line",
+        data: { labels: chartData.lease_labels, datasets: [{ label: "租约数", data: chartData.lease_values, borderColor: "#0891B2", backgroundColor: "rgba(8,145,178,.12)", tension: .35, fill: true }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid } }, plugins: { legend: { display: false } } }
+      });
+    }
+    if (details) {
+      details.addEventListener("toggle", function () {
+        if (details.open) initExtraCharts();
+      });
+    }
+  })();
 </script>
 {% endblock %}

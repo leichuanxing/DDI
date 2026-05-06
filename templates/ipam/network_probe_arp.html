@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'ipam/ipam.css' %}?v=20260507b">{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+<form method="post" class="card form-card">
+  {% csrf_token %}
+  <div class="card-header"><h2>{{ page_title }}</h2></div>
+  <div class="card-body">
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="field">
+      <label class="required" for="{{ form.switch_ip.id_for_label }}">{{ form.switch_ip.label }}</label>
+      {{ form.switch_ip }}
+      {% for e in form.switch_ip.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label class="required" for="{{ form.ssh_port.id_for_label }}">{{ form.ssh_port.label }}</label>
+      {{ form.ssh_port }}
+      {% for e in form.ssh_port.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label class="required" for="{{ form.ssh_username.id_for_label }}">{{ form.ssh_username.label }}</label>
+      {{ form.ssh_username }}
+      {% for e in form.ssh_username.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label class="required" for="{{ form.ssh_password.id_for_label }}">{{ form.ssh_password.label }}</label>
+      {{ form.ssh_password }}
+      {% for e in form.ssh_password.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="field">
+      <label class="required" for="{{ form.ssh_commands.id_for_label }}">{{ form.ssh_commands.label }}</label>
+      {{ form.ssh_commands }}
+      {% if form.ssh_commands.help_text %}<p class="field-hint">{{ form.ssh_commands.help_text }}</p>{% endif %}
+      {% for e in form.ssh_commands.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+  <div class="form-footer">
+    <a class="btn btn-ghost" href="{{ back_url }}">取消</a>
+    <button class="btn btn-primary" type="submit">{{ submit_text }}</button>
+  </div>
+</form>
+{% endblock %}

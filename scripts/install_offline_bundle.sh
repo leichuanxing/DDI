@@ -18,6 +18,13 @@ fi
 
 if [ ! -d "$IMAGES_DIR" ]; then
   echo "image directory not found: $IMAGES_DIR"
+  echo "请解压完整离线包（需与 package 同级存在 images/），并在 package 目录下执行：bash scripts/install.sh"
+  exit 1
+fi
+
+if [ ! -f "$PACKAGE_DIR/docker-compose.yml" ]; then
+  echo "docker-compose.yml not found in: $PACKAGE_DIR"
+  echo "请勿在源码仓库根目录直接运行本脚本；应使用离线包内的 package/scripts/install.sh"
   exit 1
 fi
 

@@ -1,3 +1,5 @@
+import traceback
+
 from django.utils import timezone
 
 from ddi_system.celery import app
@@ -6,6 +8,12 @@ from dhcp.services import DHCPService
 from dns.models import DNSRecord, DNSZone
 from dns.services import DNSService
 from system.services import HealthService
+
+from ipam.probe import (
+    NETWORK_PROBE_TASK_TYPE_SET,
+    redact_sensitive_payload,
+    run_network_probe_task,
+)
 
 from .models import SystemTask, TaskLog
 
@@ -17,7 +25,12 @@ def execute_system_task(self, task_id):
     task.started_at = timezone.now()
     task.celery_task_id = self.request.id
     task.save(update_fields=['status', 'started_at', 'celery_task_id', 'updated_at'])
-    TaskLog.objects.create(task=task, level='info', message=f'开始执行任务 {task.task_type}', payload=task.request_payload)
+    TaskLog.objects.create(
+        task=task,
+        level='info',
+        message=f'开始执行任务 {task.task_type}',
+        payload=redact_sensitive_payload(task.request_payload),
+    )
     try:
         payload = task.request_payload or {}
         task_type = task.task_type
@@ -45,16 +58,35 @@ def execute_system_task(self, task_id):
             result = DHCPService.release_lease(lease)
         elif task_type == 'service_health_check':
             result = HealthService.check_all()
+        elif task_type in NETWORK_PROBE_TASK_TYPE_SET:
+            result = run_network_probe_task(task_type, payload)
         else:
             result = {'success': False, 'code': 'UNSUPPORTED_TASK', 'message': f'不支持的任务类型: {task_type}', 'data': {}}
         task.response_payload = result
         task.status = 'success' if result.get('success') else 'failed'
-        task.error_message = '' if result.get('success') else result.get('message', '')
-        TaskLog.objects.create(task=task, level='info' if result.get('success') else 'error', message=result.get('message', '任务完成'), payload=result)
+        ok = bool(result.get('success'))
+        err_text = (result.get('message') or '').strip() if isinstance(result.get('message'), str) else (result.get('message') or '')
+        task.error_message = '' if ok else (err_text or '任务失败')
+        log_msg = (result.get('message') or '').strip() if isinstance(result.get('message'), str) else ''
+        if not log_msg:
+            log_msg = '任务完成' if ok else '任务失败（未返回具体说明，请查看响应数据或联系管理员）'
+        TaskLog.objects.create(
+            task=task,
+            level='info' if ok else 'error',
+            message=log_msg,
+            payload=result if isinstance(result, dict) else {'raw': str(result)},
+        )
     except Exception as exc:
         task.status = 'failed'
-        task.error_message = str(exc)
-        TaskLog.objects.create(task=task, level='error', message=str(exc))
+        tb = traceback.format_exc()
+        exc_msg = str(exc).strip() or type(exc).__name__
+        task.error_message = exc_msg
+        TaskLog.objects.create(
+            task=task,
+            level='error',
+            message=exc_msg,
+            payload={'traceback': tb[-8000:]},
+        )
     finally:
         task.finished_at = timezone.now()
         task.save()
