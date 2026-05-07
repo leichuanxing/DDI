@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.forms import modelform_factory
+from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -18,10 +19,13 @@ from rest_framework import viewsets
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from common.responses import success_response
+from common.viewsets import UnifiedModelViewSet
 from ipam.models import AddressSpace, IPAddress, IPAddressHistory, Subnet
 from ipam.services import IPAMService
-from dns.models import DNSProviderConfig, DNSZone, DNSRecord, DNSChangeLog
+from dns.models import DNSProviderConfig, DNSZone, DNSRecord, DNSChangeLog, DNSQueryLog
+from dns.services_query_logs import DNSQueryLogService
 from dhcp.models import DHCPOption, DHCPPool, DHCPProviderConfig, DHCPLease, DHCPReservation, DHCPSubnet
+from dhcp.forms import DHCPOptionForm
 from tasks.models import SystemTask, TaskLog
 from audit.models import AuditLog
 from accounts.models import LoginLog, Permission, Role
@@ -30,6 +34,7 @@ from dhcp.services import DHCPService
 from .models import SystemConfig, ServiceHealthCheck
 from .serializers import SystemConfigSerializer, ServiceHealthCheckSerializer
 from .services import HealthService
+from .forms import SystemConfigForm, SystemRoleForm, SystemUserForm
 
 STATUS_LABELS = {
     'available': '可用', 'used': '已使用', 'reserved': '预留', 'dhcp_dynamic': 'DHCP 动态分配',
@@ -328,6 +333,7 @@ API_BASE = {
     ('dns', 'zones'): '/api/dns/zones/',
     ('dns', 'service'): '/api/dns/config/',
     ('dns', 'records'): '/api/dns/records/',
+    ('dns', 'query-logs'): '/api/dns/query-logs/',
     ('dns', 'change-logs'): '/api/dns/change-logs/',
     ('dhcp', 'subnets'): '/api/dhcp/subnets/',
     ('dhcp', 'service'): '/api/dhcp/config/',
@@ -469,16 +475,40 @@ def dashboard(request):
     dns_changes_24h = DNSChangeLog.objects.filter(created_at__gte=timezone.now() - timedelta(hours=24)).count()
     dhcp_subnet_count = DHCPSubnet.objects.count()
     dhcp_pool_count = DHCPPool.objects.count()
-    subnet_labels, subnet_usage = [], []
-    for subnet in Subnet.objects.all()[:10]:
+    subnet_labels, subnet_usage, subnet_rows = [], [], []
+    for subnet in Subnet.objects.prefetch_related('ip_addresses').all()[:10]:
         total = subnet.ip_addresses.count()
         used = subnet.ip_addresses.exclude(status='available').count()
+        usage = round((used / total) * 100, 1) if total else 0
         subnet_labels.append(subnet.cidr)
-        subnet_usage.append(round((used / total) * 100, 1) if total else 0)
+        subnet_usage.append(usage)
+        subnet_rows.append({
+            'name': subnet.name or subnet.cidr,
+            'cidr': subnet.cidr,
+            'region': subnet.region.name if getattr(subnet, 'region_id', None) else '-',
+            'vlan': subnet.vlan.name if getattr(subnet, 'vlan_id', None) else '-',
+            'total': total,
+            'used': used,
+            'available': max(total - used, 0),
+            'usage': usage,
+            'status': 'failed' if usage >= 90 else 'warning' if usage >= 70 else 'normal',
+            'status_label': '高风险' if usage >= 90 else '偏高' if usage >= 70 else '正常',
+            'url': reverse('ipam-subnet-detail', kwargs={'pk': subnet.pk}),
+        })
+    subnet_rows = sorted(subnet_rows, key=lambda item: item['usage'], reverse=True)
 
     status_rows = IPAddress.objects.values('status').annotate(total=Count('id')).order_by('status')
-    status_labels = [status_label(row['status']) for row in status_rows] or ['暂无数据']
-    status_values = [row['total'] for row in status_rows] or [1]
+    ip_status_rows = [
+        {
+            'status': row['status'],
+            'label': status_label(row['status']),
+            'total': row['total'],
+            'percent': round((row['total'] / total_ips) * 100, 1) if total_ips else 0,
+        }
+        for row in status_rows
+    ]
+    status_labels = [row['label'] for row in ip_status_rows] or ['暂无数据']
+    status_values = [row['total'] for row in ip_status_rows] or [1]
 
     lease_labels, lease_values = [], []
     today = timezone.localdate()
@@ -500,6 +530,14 @@ def dashboard(request):
         for service in services:
             service.status_label = status_label(service.status)
     lease_count = DHCPLease.objects.count()
+    def _service_status(item):
+        return item.get('status') if isinstance(item, dict) else getattr(item, 'status', '')
+
+    health_counts = {
+        'normal': sum(1 for item in services if _service_status(item) == 'normal'),
+        'abnormal': sum(1 for item in services if _service_status(item) == 'abnormal'),
+        'unknown': sum(1 for item in services if _service_status(item) == 'unknown'),
+    }
 
     def _ipam_health_pred(name):
         n = name.lower()
@@ -557,7 +595,7 @@ def dashboard(request):
     context = {
         'section_title': '首页',
         'page_title': '首页仪表盘',
-        'page_description': '模块资源与健康一览；探测项为各组件最新一次检测结果。',
+        'page_description': '集中查看 IPAM、DNS、DHCP、任务和审计的关键状态。',
         'active_menu': 'dashboard',
         'dashboard_nav_pills': [
             {'label': 'IP 地址', 'url': reverse('ipam-ip-list')},
@@ -570,6 +608,17 @@ def dashboard(request):
         ],
         'dashboard_modules': dashboard_modules,
         'services': services,
+        'health_counts': health_counts,
+        'subnet_rows': subnet_rows[:8],
+        'ip_status_rows': ip_status_rows,
+        'recent_tasks': SystemTask.objects.order_by('-created_at')[:8],
+        'recent_audit_logs': AuditLog.objects.order_by('-created_at')[:8],
+        'risk_summary': {
+            'failed_tasks': SystemTask.objects.filter(status='failed').count(),
+            'running_tasks': SystemTask.objects.filter(status='running').count(),
+            'abnormal_services': health_counts['abnormal'],
+            'high_usage_subnets': sum(1 for item in subnet_rows if item['usage'] >= 80),
+        },
         'stats': {
             'ip_total': total_ips,
             'ip_allocated': allocated_ips,
@@ -606,6 +655,7 @@ PAGE_META = {
     ('dns', 'service'): ('DNS 管理', 'DNS 服务配置', '配置 PowerDNS API 地址、端口、API Key、Server ID 和健康检查。', DNSProviderConfig),
     ('dns', 'records'): ('DNS 管理', '记录管理', '查询和维护 A、AAAA、CNAME、MX、TXT、PTR 等记录。', DNSRecord),
     ('dns', 'change-logs'): ('DNS 管理', 'DNS 变更日志', '审计 DNS 配置下发和同步结果。', DNSChangeLog),
+    ('dns', 'query-logs'): ('DNS 管理', 'DNS 解析记录查询', '查询客户端最近 7 天 DNS 解析访问记录。', DNSQueryLog),
     ('dhcp', 'subnets'): ('DHCP 管理', 'DHCP 子网', '维护 Kea DHCP 子网、租约时间和下发状态。', DHCPSubnet),
     ('dhcp', 'service'): ('DHCP 管理', 'Kea 服务配置', '配置 Kea Control Agent API、认证信息、服务类型和健康检查。', DHCPProviderConfig),
     ('dhcp', 'pools'): ('DHCP 管理', '地址池管理', '管理 DHCP 地址池范围和容量利用率。', DHCPPool),
@@ -661,6 +711,8 @@ def build_rows(section, page, objects):
             cells = [cell(obj.zone.name if obj.zone_id else '-'), cell(obj.name, True), cell(badge(obj.record_type, obj.record_type)), cell(obj.content, True), cell(obj.ttl), cell(obj.priority or '-'), cell(badge('disabled' if obj.disabled else 'enabled')), cell(obj.updated_at.strftime('%Y-%m-%d %H:%M'))]
         elif isinstance(obj, DNSChangeLog):
             cells = [cell(obj.zone.name if obj.zone_id else '-'), cell(obj.action), cell(obj.record_id or '-'), cell(badge(obj.result, obj.result)), cell(obj.operator.username if obj.operator_id else '-'), cell(obj.error_message, True), cell(obj.created_at.strftime('%Y-%m-%d %H:%M'))]
+        elif isinstance(obj, DNSQueryLog):
+            cells = [cell(obj.query_time.strftime('%Y-%m-%d %H:%M:%S')), cell(obj.client_ip or '-'), cell(obj.query_name, True), cell(badge(obj.query_type or 'unknown', obj.query_type or '未知')), cell(obj.response_code or '-'), cell(obj.answer, True), cell(obj.server_ip or '-'), cell(obj.protocol or '-'), cell(obj.latency_ms if obj.latency_ms is not None else '-'), cell(badge(obj.result, obj.get_result_display()))]
         elif isinstance(obj, DHCPProviderConfig):
             health = component_health('ddi-web -> ddi-kea API')
             cells = [
@@ -715,7 +767,24 @@ def build_rows(section, page, objects):
                 {'label': '释放', 'class': 'btn-danger', 'url': f'/api/dhcp/leases/{obj.pk}/release/', 'success': '租约释放任务已创建'},
                 {'label': '转保留', 'class': 'btn-info', 'url': f'/api/dhcp/leases/{obj.pk}/convert-to-reservation/', 'success': '已转换为保留地址'},
             ]
-        rows.append({'id': obj.pk, 'cells': cells, 'api_url': api_url, 'delete_url': delete_url, 'deploy_url': deploy_url, 'edit_url': edit_url, 'deployable': deployable, 'show_delete': bool(delete_url), 'extra_actions': extra_actions})
+        show_view = True
+        show_edit = True
+        if (section, page) == ('dns', 'query-logs'):
+            show_view = False
+            show_edit = False
+        rows.append({
+            'id': obj.pk,
+            'cells': cells,
+            'api_url': api_url,
+            'delete_url': delete_url,
+            'deploy_url': deploy_url,
+            'edit_url': edit_url,
+            'deployable': deployable,
+            'show_delete': bool(delete_url),
+            'extra_actions': extra_actions,
+            'show_view': show_view,
+            'show_edit': show_edit,
+        })
     return rows
 
 
@@ -729,6 +798,7 @@ def columns_for(section, page):
         ('dns', 'service'): ['关联容器', '配置状态', 'API 地址', 'API 端口', 'Server ID', 'SSL', '健康检查', '连通状态', '最近检测', '错误信息', '更新时间'],
         ('dns', 'records'): ['Zone', '记录名称', '类型', '记录内容', 'TTL', 'MX 优先级', '状态', '更新时间'],
         ('dns', 'change-logs'): ['Zone', '动作', '记录', '结果', '操作人', '错误信息', '时间'],
+        ('dns', 'query-logs'): ['解析时间', '客户端 IP', '查询域名', '类型', '响应码', '解析结果', 'DNS 服务 IP', '协议', '耗时 ms', '结果'],
         ('dhcp', 'subnets'): ['子网', '子网 ID', 'Relay 地址', '网关', 'DNS Server', 'Domain Name', '地址池数量', '租约时间', '状态', '最近下发时间'],
         ('dhcp', 'service'): ['关联容器', '配置状态', 'API 地址', 'API 端口', '服务类型', '认证', '用户名', '健康检查', '连通状态', '最近检测', '错误信息', '更新时间'],
         ('dhcp', 'pools'): ['所属子网', '起始 IP', '结束 IP', '地址数量', '已使用数量', '利用率', '状态'],
@@ -751,6 +821,311 @@ def columns_for(section, page):
     return mapping.get((section, page), ['名称', '说明', '状态', '更新时间'])
 
 
+def dhcp_option_scope_label(option):
+    if option.scope_type == 'global':
+        return '全局'
+    if option.scope_type == 'subnet':
+        subnet = DHCPSubnet.objects.filter(pk=option.scope_id).first()
+        return f'子网 {subnet.subnet}' if subnet else f'子网 #{option.scope_id}'
+    if option.scope_type == 'pool':
+        pool = DHCPPool.objects.select_related('dhcp_subnet').filter(pk=option.scope_id).first()
+        if pool:
+            return f'地址池 {pool.pool_start} - {pool.pool_end}'
+        return f'地址池 #{option.scope_id}'
+    return option.scope_type or '-'
+
+
+def dhcp_option_qs(request):
+    options = DHCPOption.objects.order_by('scope_type', 'scope_id', 'option_code')
+    q = (request.GET.get('q') or '').strip()
+    scope_type = (request.GET.get('scope_type') or '').strip()
+    if q:
+        filters = Q(option_name__icontains=q) | Q(option_value__icontains=q) | Q(description__icontains=q)
+        if q.isdigit():
+            filters |= Q(option_code=int(q)) | Q(scope_id=int(q))
+        options = options.filter(filters)
+    if scope_type:
+        options = options.filter(scope_type=scope_type)
+    return options
+
+
+def dhcp_option_context(request, form=None, option=None):
+    options = dhcp_option_qs(request)
+    option_rows = []
+    for item in options.select_related()[:100]:
+        option_rows.append({
+            'obj': item,
+            'scope_label': dhcp_option_scope_label(item),
+            'scope_badge': {
+                'global': 'status-enabled',
+                'subnet': 'status-used',
+                'pool': 'status-pending',
+            }.get(item.scope_type, 'status-unknown'),
+        })
+    return {
+        'section_title': 'DHCP 管理',
+        'page_title': 'DHCP Option',
+        'page_description': '配置 Kea DHCP 全局、子网和地址池作用域 Option，并参与 DHCP 配置下发。',
+        'active_section': 'dhcp',
+        'active_menu': 'options',
+        'options': option_rows,
+        'total_count': options.count(),
+        'scope_type': request.GET.get('scope_type', ''),
+        'q': request.GET.get('q', ''),
+        'summary': {
+            'total': DHCPOption.objects.count(),
+            'global': DHCPOption.objects.filter(scope_type='global').count(),
+            'subnet': DHCPOption.objects.filter(scope_type='subnet').count(),
+            'pool': DHCPOption.objects.filter(scope_type='pool').count(),
+        },
+        'form': form,
+        'option': option,
+    }
+
+
+def task_qs_for_page(page):
+    tasks = SystemTask.objects.select_related('created_by').order_by('-created_at')
+    if page == 'failed':
+        tasks = tasks.filter(status='failed')
+    return tasks
+
+
+def task_center_context(request, page):
+    q = (request.GET.get('q') or '').strip()
+    status = (request.GET.get('status') or '').strip()
+    task_type = (request.GET.get('task_type') or '').strip()
+    tasks = task_qs_for_page(page)
+    if q:
+        tasks = tasks.filter(
+            Q(task_type__icontains=q) |
+            Q(target_service__icontains=q) |
+            Q(error_message__icontains=q) |
+            Q(celery_task_id__icontains=q)
+        )
+    if status and page != 'failed':
+        tasks = tasks.filter(status=status)
+    if task_type:
+        tasks = tasks.filter(task_type=task_type)
+    selected_task = tasks.first()
+    selected_id = request.GET.get('task_id')
+    if selected_id:
+        selected_task = SystemTask.objects.filter(pk=selected_id).first() or selected_task
+    logs = TaskLog.objects.select_related('task')
+    if page == 'logs':
+        if selected_task:
+            logs = logs.filter(task=selected_task)
+        else:
+            logs = logs.none()
+    else:
+        task_ids = list(tasks.values_list('id', flat=True)[:50])
+        logs = logs.filter(task_id__in=task_ids)
+    logs = logs.order_by('-created_at')[:80]
+    return {
+        'section_title': '任务中心',
+        'page_title': {'list': '任务列表', 'logs': '任务日志', 'failed': '失败任务'}.get(page, '任务中心'),
+        'page_description': {
+            'list': '查看 DNS、DHCP、健康检查和后台任务执行状态。',
+            'logs': '按任务查看执行过程日志、响应摘要和错误详情。',
+            'failed': '聚焦失败任务，支持查看日志和重新执行。',
+        }.get(page, ''),
+        'active_section': 'tasks',
+        'active_menu': page,
+        'tasks': tasks[:50],
+        'logs': logs,
+        'selected_task': selected_task,
+        'q': q,
+        'status': status,
+        'task_type': task_type,
+        'task_types': SystemTask.objects.order_by('task_type').values_list('task_type', flat=True).distinct(),
+        'summary': {
+            'total': SystemTask.objects.count(),
+            'pending': SystemTask.objects.filter(status='pending').count(),
+            'running': SystemTask.objects.filter(status='running').count(),
+            'success': SystemTask.objects.filter(status='success').count(),
+            'failed': SystemTask.objects.filter(status='failed').count(),
+        },
+    }
+
+
+def audit_queryset_for_page(page):
+    if page == 'login':
+        return LoginLog.objects.order_by('-created_at')
+    if page == 'changes':
+        return DNSChangeLog.objects.select_related('zone', 'record', 'operator').order_by('-created_at')
+    return AuditLog.objects.order_by('-created_at')
+
+
+def audit_center_context(request, page):
+    q = (request.GET.get('q') or '').strip()
+    result = (request.GET.get('result') or '').strip()
+    module = (request.GET.get('module') or '').strip()
+    action = (request.GET.get('action') or '').strip()
+    logs = audit_queryset_for_page(page)
+    if q:
+        if page == 'login':
+            logs = logs.filter(Q(username__icontains=q) | Q(request_ip__icontains=q) | Q(user_agent__icontains=q) | Q(error_message__icontains=q))
+        elif page == 'changes':
+            logs = logs.filter(Q(action__icontains=q) | Q(error_message__icontains=q) | Q(zone__name__icontains=q) | Q(record__name__icontains=q))
+        else:
+            logs = logs.filter(Q(username__icontains=q) | Q(module__icontains=q) | Q(action__icontains=q) | Q(object_name__icontains=q) | Q(request_path__icontains=q) | Q(error_message__icontains=q))
+    if result:
+        logs = logs.filter(result=result)
+    if page == 'operations':
+        if module:
+            logs = logs.filter(module=module)
+        if action:
+            logs = logs.filter(action=action)
+    elif page == 'changes' and action:
+        logs = logs.filter(action=action)
+    return {
+        'section_title': '审计日志',
+        'page_title': {'operations': '操作审计', 'login': '登录日志', 'changes': '配置变更日志'}.get(page, '审计日志'),
+        'page_description': {
+            'operations': '查看用户操作、模块、对象、结果和来源 IP。',
+            'login': '查看用户登录成功与失败记录。',
+            'changes': '查看 DNS 配置同步、下发、删除和变更结果。',
+        }.get(page, ''),
+        'active_section': 'audit',
+        'active_menu': page,
+        'logs': logs[:100],
+        'total_count': logs.count(),
+        'q': q,
+        'result': result,
+        'module': module,
+        'action': action,
+        'modules': AuditLog.objects.order_by('module').values_list('module', flat=True).distinct(),
+        'actions': AuditLog.objects.order_by('action').values_list('action', flat=True).distinct() if page == 'operations' else DNSChangeLog.objects.order_by('action').values_list('action', flat=True).distinct(),
+        'summary': {
+            'operations': AuditLog.objects.count(),
+            'login': LoginLog.objects.count(),
+            'changes': DNSChangeLog.objects.count(),
+            'failed': AuditLog.objects.filter(result='failed').count() + LoginLog.objects.filter(result='failed').count() + DNSChangeLog.objects.filter(result='failed').count(),
+        },
+    }
+
+
+def latest_health_rows(limit=80):
+    return ServiceHealthCheck.objects.order_by('-checked_at')[:limit]
+
+
+def system_page_queryset(request, page):
+    UserModel = get_user_model()
+    q = (request.GET.get('q') or '').strip()
+    status = (request.GET.get('status') or '').strip()
+    if page == 'users':
+        qs = UserModel.objects.prefetch_related('roles').order_by('-id')
+        if q:
+            qs = qs.filter(Q(username__icontains=q) | Q(real_name__icontains=q) | Q(email__icontains=q) | Q(mobile__icontains=q))
+        if status == 'enabled':
+            qs = qs.filter(is_active=True)
+        elif status == 'disabled':
+            qs = qs.filter(is_active=False)
+        return qs
+    if page == 'roles':
+        qs = Role.objects.prefetch_related('permissions', 'users').order_by('name')
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(description__icontains=q))
+        return qs
+    if page == 'permissions':
+        qs = Permission.objects.order_by('module', 'action')
+        module = request.GET.get('module') or ''
+        if q:
+            qs = qs.filter(Q(module__icontains=q) | Q(action__icontains=q) | Q(code__icontains=q) | Q(description__icontains=q))
+        if module:
+            qs = qs.filter(module=module)
+        return qs
+    if page == 'configs':
+        qs = SystemConfig.objects.order_by('key')
+        if q:
+            qs = qs.filter(Q(key__icontains=q) | Q(description__icontains=q))
+        return qs
+    if page == 'health':
+        qs = ServiceHealthCheck.objects.order_by('-checked_at')
+        if q:
+            qs = qs.filter(Q(service_name__icontains=q) | Q(error_message__icontains=q) | Q(ip_address__icontains=q))
+        if status:
+            qs = qs.filter(status=status)
+        return qs
+    return []
+
+
+def system_center_context(request, page):
+    q = (request.GET.get('q') or '').strip()
+    status = (request.GET.get('status') or '').strip()
+    qs = system_page_queryset(request, page)
+    latest_health = _latest_health_by_name()
+    component_rows = [
+        {
+            'name': 'ddi-web',
+            'type': '管理入口',
+            'endpoint': 'http://ddi-web:8000',
+            'config_status': badge('enabled', '内置'),
+            'health': latest_health.get('ddi-web'),
+        },
+        {
+            'name': 'ddi-mysql',
+            'type': '数据库',
+            'endpoint': f"{getattr(settings, 'DATABASES', {}).get('default', {}).get('HOST', 'ddi-mysql')}:{getattr(settings, 'DATABASES', {}).get('default', {}).get('PORT', '3306')}",
+            'config_status': badge('enabled', '已关联'),
+            'health': latest_health.get('ddi-web -> ddi-mysql'),
+        },
+        {
+            'name': 'ddi-pdns',
+            'type': 'PowerDNS API',
+            'endpoint': (DNSService.ensure_config().api_url if DNSProviderConfig.objects.exists() else 'http://ddi-pdns:8081'),
+            'config_status': badge('enabled' if dns_config_complete(DNSService.ensure_config()) else 'warning', '配置完整' if dns_config_complete(DNSService.ensure_config()) else '配置不完整'),
+            'health': latest_health.get('ddi-web -> ddi-pdns API'),
+        },
+        {
+            'name': 'ddi-kea',
+            'type': 'Kea Control Agent',
+            'endpoint': (DHCPService.ensure_config().api_url if DHCPProviderConfig.objects.exists() else 'http://ddi-kea:8000'),
+            'config_status': badge('enabled' if dhcp_config_complete(DHCPService.ensure_config()) else 'warning', '配置完整' if dhcp_config_complete(DHCPService.ensure_config()) else '配置不完整'),
+            'health': latest_health.get('ddi-web -> ddi-kea API'),
+        },
+    ]
+    page_titles = {
+        'users': ('用户管理', '管理平台登录用户、管理员状态和角色绑定。'),
+        'roles': ('角色管理', '维护角色编码、说明和权限集合。'),
+        'permissions': ('权限管理', '查看系统内置权限模块和动作编码。'),
+        'configs': ('系统配置', '维护平台级 JSON 配置项。'),
+        'components': ('组件配置', '查看 ddi-web、ddi-mysql、ddi-pdns、ddi-kea 关联配置和连通状态。'),
+        'health': ('健康检查', '查看组件健康检查记录，支持立即发起检测。'),
+    }
+    page_title, description = page_titles.get(page, ('系统管理', ''))
+    return {
+        'section_title': '系统管理',
+        'page_title': page_title,
+        'page_description': description,
+        'active_section': 'system',
+        'active_menu': page,
+        'page': page,
+        'q': q,
+        'status': status,
+        'objects': qs[:100] if page != 'components' else [],
+        'total_count': 0 if page == 'components' else qs.count(),
+        'component_rows': component_rows,
+        'health_rows': latest_health_rows(),
+        'permission_modules': Permission.objects.order_by('module').values_list('module', flat=True).distinct(),
+        'summary': {
+            'users': get_user_model().objects.count(),
+            'active_users': get_user_model().objects.filter(is_active=True).count(),
+            'roles': Role.objects.count(),
+            'permissions': Permission.objects.count(),
+            'configs': SystemConfig.objects.count(),
+            'health_abnormal': ServiceHealthCheck.objects.filter(status='abnormal').count(),
+        },
+    }
+
+
+def system_form_for_page(page):
+    return {
+        'users': SystemUserForm,
+        'roles': SystemRoleForm,
+        'configs': SystemConfigForm,
+    }.get(page)
+
+
 @login_required
 def dns_service_page(request):
     return web_list(request, 'dns', 'service')
@@ -769,8 +1144,83 @@ def web_list(request, section, page):
         target = redirect_map.get(page)
         if target:
             return redirect(target)
+    if section == 'tasks' and page in {'list', 'logs', 'failed'}:
+        return render(request, 'tasks/center.html', task_center_context(request, page))
+    if section == 'audit' and page in {'operations', 'login', 'changes'}:
+        return render(request, 'audit/center.html', audit_center_context(request, page))
+    if section == 'system' and page in {'users', 'roles', 'permissions', 'configs', 'components', 'health'}:
+        return render(request, 'system/center.html', system_center_context(request, page))
     if section == 'linkage':
         raise Http404('联动管理功能已移除')
+    if (section, page) == ('dhcp', 'options'):
+        return render(request, 'dhcp/options.html', dhcp_option_context(request))
+    if (section, page) == ('dhcp', 'service'):
+        cfg = DHCPService.ensure_config()
+        if request.method == 'POST':
+            actions = request.POST.getlist('action')
+            action = actions[-1] if actions else 'save'
+            if action == 'reset':
+                cfg = DHCPService.reset_default_config()
+                messages.success(request, 'Kea 服务配置已恢复为默认容器配置。')
+                return redirect('web-list', section=section, page=page)
+            if action == 'check':
+                HealthService.check_kea_api()
+                messages.success(request, 'Kea API 连通性检测已完成。')
+                return redirect('web-list', section=section, page=page)
+            cfg.api_url = (request.POST.get('api_url') or '').strip()
+            cfg.api_port = int(request.POST.get('api_port') or 8000)
+            cfg.service_type = request.POST.get('service_type') or 'dhcp4'
+            cfg.timeout = int(request.POST.get('timeout') or 5)
+            cfg.auth_enabled = request.POST.get('auth_enabled') == 'on'
+            cfg.username = (request.POST.get('username') or '').strip()
+            password = request.POST.get('password')
+            if password:
+                cfg.password = password
+            cfg.health_check_enabled = request.POST.get('health_check_enabled') == 'on'
+            try:
+                cfg.full_clean()
+                cfg.save()
+                messages.success(request, 'Kea 服务配置已保存。')
+            except ValidationError as exc:
+                for item in getattr(exc, 'messages', [str(exc)]):
+                    messages.error(request, item)
+            return redirect('web-list', section=section, page=page)
+
+        health = HealthService.check_kea_api() if cfg.health_check_enabled else {
+            'status': 'unknown',
+            'error_message': '健康检查已关闭',
+            'response_time_ms': None,
+            'ip_address': None,
+            'details': {},
+        }
+        client = DHCPService.client_for_config(cfg)
+        version = client.version_get(cfg.service_type)
+        status_info = client.status_get(cfg.service_type)
+        commands = client.list_commands()
+        current_config = client.config_get(cfg.service_type)
+        command_count = 0
+        data = commands.get('data')
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            args = data[0].get('arguments') or []
+            command_count = len(args) if isinstance(args, list) else 0
+        return render(request, 'dhcp/service.html', {
+            'section_title': 'DHCP 管理',
+            'page_title': 'Kea 服务配置',
+            'page_description': '配置 Kea Control Agent，并查看 API 连通性、版本和运行状态。',
+            'active_section': 'dhcp',
+            'active_menu': 'service',
+            'config': cfg,
+            'default_config': DHCPService.default_config_values(),
+            'health': health,
+            'health_label': status_label(health.get('status')),
+            'version': version,
+            'status_info': status_info,
+            'commands': commands,
+            'command_count': command_count,
+            'current_config': current_config,
+            'config_complete': dhcp_config_complete(cfg),
+            'is_default_container': 'ddi-kea' in (cfg.api_url or ''),
+        })
     if (section, page) == ('dns', 'service'):
         cfg = DNSService.reset_default_config()
         health = HealthService.check_pdns_api()
@@ -804,7 +1254,7 @@ def web_list(request, section, page):
             'health_label': status_label(health.get('status')),
             'runtime_path': 'docker/pdns/runtime/recursion.env',
         })
-    if False and (section, page) == ('dns', 'records'):
+    if (section, page) == ('dns', 'records'):
         mode = request.GET.get('mode', 'all')
         if request.method == 'POST':
             mode = request.POST.get('mode') or mode
@@ -1074,10 +1524,12 @@ def web_list(request, section, page):
             qs = qs.exclude(state='active')
         if (section, page) == ('tasks', 'failed'):
             qs = qs.filter(status='failed')
+        if (section, page) == ('dns', 'query-logs'):
+            DNSQueryLogService.cleanup_expired()
         q = request.GET.get('q', '').strip()
         if q:
             search = Q()
-            for field in ('name', 'code', 'cidr', 'ip_address', 'hostname', 'mac_address', 'username', 'module', 'action', 'object_name', 'task_type', 'target_service', 'subnet', 'content', 'description'):
+            for field in ('name', 'code', 'cidr', 'ip_address', 'hostname', 'mac_address', 'username', 'module', 'action', 'object_name', 'task_type', 'target_service', 'subnet', 'content', 'description', 'client_ip', 'query_name', 'answer', 'response_code'):
                 try:
                     model._meta.get_field(field)
                 except Exception:
@@ -1094,6 +1546,24 @@ def web_list(request, section, page):
                     continue
                 qs = qs.filter(**{field: status})
                 break
+        type_value = request.GET.get('type')
+        if type_value:
+            for field in ('record_type', 'query_type', 'task_type'):
+                try:
+                    model._meta.get_field(field)
+                except Exception:
+                    continue
+                qs = qs.filter(**{field: type_value})
+                break
+        date_value = request.GET.get('date')
+        if date_value:
+            for field in ('query_time', 'created_at', 'updated_at'):
+                try:
+                    model._meta.get_field(field)
+                except Exception:
+                    continue
+                qs = qs.filter(**{f'{field}__date': date_value})
+                break
         total = qs.count()
         objects = qs[:30]
         rows = build_rows(section, page, objects)
@@ -1103,20 +1573,34 @@ def web_list(request, section, page):
         page_title = page.replace('-', ' ').title()
         description = '该功能入口已纳入统一导航，后续可接入对应业务数据。'
         total, rows, columns = 0, [], ['名称', '说明', '状态', '更新时间']
+    readonly_list_pages = {
+        ('dhcp', 'leases'),
+        ('dhcp', 'lease-history'),
+        ('tasks', 'list'),
+        ('tasks', 'logs'),
+        ('tasks', 'failed'),
+        ('audit', 'operations'),
+        ('audit', 'login'),
+        ('audit', 'changes'),
+        ('dns', 'change-logs'),
+        ('dns', 'query-logs'),
+    }
+    bulk_delete_url = '/api/dns/records/bulk-delete/' if (section, page) == ('dns', 'records') else ''
+    show_bulk_actions = bool(bulk_delete_url)
     return render(request, 'generic_list.html', {
         'section_title': section_title,
         'page_title': page_title,
         'page_description': description,
-        'primary_action': '' if (section, page) in {('dns', 'service'), ('dhcp', 'service')} else '新增',
+        'primary_action': '' if (section, page) in {('dns', 'service'), ('dhcp', 'service')} | readonly_list_pages else '新增',
         'active_section': section,
         'active_menu': page,
         'columns': columns,
         'rows': rows,
         'total_count': total,
-        'bulk_delete_url': '/api/dns/records/bulk-delete/' if (section, page) == ('dns', 'records') else '',
+        'bulk_delete_url': bulk_delete_url,
         'create_url': f'/ui/{section}/{page}/new/' if (section, page) in FORM_FIELDS else '',
-        'show_bulk_actions': (section, page) not in {('dns', 'service'), ('dhcp', 'service')},
-        'show_bulk_deploy': section != 'ipam',
+        'show_bulk_actions': show_bulk_actions,
+        'show_bulk_deploy': False,
     })
 
 
@@ -1133,6 +1617,38 @@ def web_create(request, section, page):
             return redirect(target)
     if section == 'linkage':
         raise Http404('联动管理功能已移除')
+    if section == 'system':
+        FormClass = system_form_for_page(page)
+        if not FormClass:
+            return redirect('web-list', section=section, page=page)
+        form = FormClass(request.POST or None)
+        if request.method == 'POST' and form.is_valid():
+            form.save()
+            messages.success(request, '系统管理对象已保存。')
+            return redirect('web-list', section=section, page=page)
+        title_map = {'users': '用户', 'roles': '角色', 'configs': '系统配置'}
+        return render(request, 'generic_form.html', {
+            'section_title': '系统管理',
+            'page_title': f'新增{title_map.get(page, "对象")}',
+            'page_description': '请按字段要求填写，保存后立即生效。',
+            'form_title': f'新增{title_map.get(page, "对象")}',
+            'form': form,
+            'back_url': f'/ui/{section}/{page}/',
+            'active_section': section,
+            'active_menu': page,
+        })
+    if (section, page) == ('dhcp', 'options'):
+        form = DHCPOptionForm(request.POST or None)
+        if request.method == 'POST' and form.is_valid():
+            form.save()
+            messages.success(request, 'DHCP Option 已保存。需要生效时请到 DHCP 配置下发页面执行下发。')
+            return redirect('web-list', section=section, page=page)
+        return render(request, 'dhcp/option_form.html', {
+            **dhcp_option_context(request, form=form),
+            'page_title': '新增 DHCP Option',
+            'form_title': '新增 DHCP Option',
+            'back_url': f'/ui/{section}/{page}/',
+        })
     if (section, page) == ('dns', 'records'):
         if request.method == 'POST':
             try:
@@ -1184,6 +1700,41 @@ def web_edit(request, section, page, pk):
             return redirect(target[0], pk=target[1])
     if section == 'linkage':
         raise Http404('联动管理功能已移除')
+    if section == 'system':
+        FormClass = system_form_for_page(page)
+        if not FormClass:
+            return redirect('web-list', section=section, page=page)
+        model_map = {'users': get_user_model(), 'roles': Role, 'configs': SystemConfig}
+        instance = get_object_or_404(model_map[page], pk=pk)
+        form = FormClass(request.POST or None, instance=instance)
+        if request.method == 'POST' and form.is_valid():
+            form.save()
+            messages.success(request, '系统管理对象已更新。')
+            return redirect('web-list', section=section, page=page)
+        title_map = {'users': '用户', 'roles': '角色', 'configs': '系统配置'}
+        return render(request, 'generic_form.html', {
+            'section_title': '系统管理',
+            'page_title': f'编辑{title_map.get(page, "对象")}',
+            'page_description': '请按字段要求填写，保存后立即生效。',
+            'form_title': f'编辑{title_map.get(page, "对象")}',
+            'form': form,
+            'back_url': f'/ui/{section}/{page}/',
+            'active_section': section,
+            'active_menu': page,
+        })
+    if (section, page) == ('dhcp', 'options'):
+        instance = get_object_or_404(DHCPOption, pk=pk)
+        form = DHCPOptionForm(request.POST or None, instance=instance)
+        if request.method == 'POST' and form.is_valid():
+            form.save()
+            messages.success(request, 'DHCP Option 已更新。需要生效时请到 DHCP 配置下发页面执行下发。')
+            return redirect('web-list', section=section, page=page)
+        return render(request, 'dhcp/option_form.html', {
+            **dhcp_option_context(request, form=form, option=instance),
+            'page_title': '编辑 DHCP Option',
+            'form_title': '编辑 DHCP Option',
+            'back_url': f'/ui/{section}/{page}/',
+        })
     if (section, page) == ('dns', 'records'):
         instance = get_object_or_404(DNSRecord.objects.select_related('zone'), pk=pk)
         if request.method == 'POST':
@@ -1228,4 +1779,7 @@ def dashboard_stats(request):
 def services_view(request): return success_response(ServiceHealthCheckSerializer(ServiceHealthCheck.objects.all()[:20], many=True).data)
 @api_view(['POST'])
 def check_now_view(request): return success_response(HealthService.check_all())
-class SystemConfigViewSet(viewsets.ModelViewSet): queryset=SystemConfig.objects.all(); serializer_class=SystemConfigSerializer
+class SystemConfigViewSet(UnifiedModelViewSet):
+    queryset = SystemConfig.objects.all().order_by('key')
+    serializer_class = SystemConfigSerializer
+    permission_module = 'system'

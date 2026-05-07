@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+{% include "components/page_header.html" with primary_action="" %}
+
+<div class="stat-grid stat-grid--compact">
+  <div class="stat-card"><div><div class="label">用户总数</div><div class="value">{{ summary.users }}</div><div class="trend">启用 {{ summary.active_users }}</div></div><div class="stat-icon">U</div></div>
+  <div class="stat-card stat-purple"><div><div class="label">角色数量</div><div class="value">{{ summary.roles }}</div><div class="trend">RBAC 角色</div></div><div class="stat-icon">R</div></div>
+  <div class="stat-card stat-cyan"><div><div class="label">权限数量</div><div class="value">{{ summary.permissions }}</div><div class="trend">模块动作编码</div></div><div class="stat-icon">P</div></div>
+  <div class="stat-card {% if summary.health_abnormal %}stat-red{% else %}stat-green{% endif %}"><div><div class="label">异常检测</div><div class="value">{{ summary.health_abnormal }}</div><div class="trend">健康检查历史</div></div><div class="stat-icon">H</div></div>
+</div>
+
+<div class="page-actions" style="justify-content:space-between;margin-bottom:14px">
+  <div class="row-actions">
+    <a class="btn btn-ghost btn-sm {% if page == 'users' %}btn-soft{% endif %}" href="{% url 'web-list' 'system' 'users' %}">用户管理</a>
+    <a class="btn btn-ghost btn-sm {% if page == 'roles' %}btn-soft{% endif %}" href="{% url 'web-list' 'system' 'roles' %}">角色管理</a>
+    <a class="btn btn-ghost btn-sm {% if page == 'permissions' %}btn-soft{% endif %}" href="{% url 'web-list' 'system' 'permissions' %}">权限管理</a>
+    <a class="btn btn-ghost btn-sm {% if page == 'configs' %}btn-soft{% endif %}" href="{% url 'web-list' 'system' 'configs' %}">系统配置</a>
+    <a class="btn btn-ghost btn-sm {% if page == 'components' %}btn-soft{% endif %}" href="{% url 'web-list' 'system' 'components' %}">组件配置</a>
+    <a class="btn btn-ghost btn-sm {% if page == 'health' %}btn-soft{% endif %}" href="{% url 'web-list' 'system' 'health' %}">健康检查</a>
+  </div>
+  <div class="row-actions">
+    {% if page == 'users' %}<a class="btn btn-primary btn-sm" href="{% url 'web-create' 'system' 'users' %}">+ 新增用户</a>{% endif %}
+    {% if page == 'roles' %}<a class="btn btn-primary btn-sm" href="{% url 'web-create' 'system' 'roles' %}">+ 新增角色</a>{% endif %}
+    {% if page == 'configs' %}<a class="btn btn-primary btn-sm" href="{% url 'web-create' 'system' 'configs' %}">+ 新增配置</a>{% endif %}
+    {% if page == 'health' or page == 'components' %}<button class="btn btn-primary btn-sm" type="button" data-health-check-url="{% url 'check-now' %}">立即检测</button>{% endif %}
+  </div>
+</div>
+
+{% if page != 'components' %}
+<form class="card search-panel" method="get">
+  <div class="field">
+    <label for="q">关键词</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="搜索名称、编码、用户、服务或说明">
+  </div>
+  {% if page == 'users' or page == 'health' %}
+  <div class="field">
+    <label for="status">状态</label>
+    <select id="status" name="status">
+      <option value="">全部状态</option>
+      {% if page == 'users' %}
+      <option value="enabled" {% if status == 'enabled' %}selected{% endif %}>启用</option>
+      <option value="disabled" {% if status == 'disabled' %}selected{% endif %}>禁用</option>
+      {% else %}
+      <option value="normal" {% if status == 'normal' %}selected{% endif %}>正常</option>
+      <option value="abnormal" {% if status == 'abnormal' %}selected{% endif %}>异常</option>
+      <option value="unknown" {% if status == 'unknown' %}selected{% endif %}>未知</option>
+      {% endif %}
+    </select>
+  </div>
+  {% elif page == 'permissions' %}
+  <div class="field">
+    <label for="module">模块</label>
+    <select id="module" name="module">
+      <option value="">全部模块</option>
+      {% for item in permission_modules %}
+      <option value="{{ item }}" {% if request.GET.module == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% else %}
+  <div class="field"><label>&nbsp;</label><input disabled value="全部状态"></div>
+  {% endif %}
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="{{ request.path }}">重置</a>
+</form>
+{% endif %}
+
+{% if page == 'components' %}
+<section class="card table-card">
+  <div class="table-tools"><strong>组件关联状态</strong><span class="selected-count">管理流量仅从 ddi-web 调用组件 API</span></div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead><tr><th>组件</th><th>类型</th><th>访问地址</th><th>配置状态</th><th>连通状态</th><th>最近检测</th><th>响应耗时</th><th>错误信息</th><th>操作</th></tr></thead>
+      <tbody>
+      {% for row in component_rows %}
+        <tr>
+          <td><strong>{{ row.name }}</strong></td>
+          <td>{{ row.type }}</td>
+          <td>{{ row.endpoint }}</td>
+          <td>{{ row.config_status|safe }}</td>
+          <td>{% if row.health %}{% include "components/status_badge.html" with status=row.health.status label=row.health.get_status_display %}{% else %}{% include "components/status_badge.html" with status="unknown" label="未知" %}{% endif %}</td>
+          <td>{% if row.health %}{{ row.health.checked_at|date:"Y-m-d H:i" }}{% else %}-{% endif %}</td>
+          <td>{% if row.health.response_time_ms != None %}{{ row.health.response_time_ms }} ms{% else %}-{% endif %}</td>
+          <td class="truncate">{% if row.health %}{{ row.health.error_message|default:"-" }}{% else %}-{% endif %}</td>
+          <td>
+            {% if row.name == 'ddi-pdns' %}<a class="btn btn-soft btn-sm" href="{% url 'dns-service-page' %}">DNS 配置</a>{% elif row.name == 'ddi-kea' %}<a class="btn btn-soft btn-sm" href="{% url 'web-list' 'dhcp' 'service' %}">Kea 配置</a>{% else %}<span class="text-muted">内置</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="card table-card">
+  <div class="table-tools">
+    <strong>{{ page_title }}</strong>
+    <span class="selected-count">共 {{ total_count }} 条</span>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      {% if page == 'users' %}
+      <thead><tr><th>用户名</th><th>真实姓名</th><th>邮箱</th><th>手机号</th><th>角色</th><th>管理员</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead>
+      <tbody>{% for item in objects %}<tr>
+        <td><strong>{{ item.username }}</strong></td><td>{{ item.real_name|default:"-" }}</td><td>{{ item.email|default:"-" }}</td><td>{{ item.mobile|default:"-" }}</td>
+        <td>{% for role in item.roles.all %}<span class="status-badge status-used">{{ role.name }}</span>{% empty %}-{% endfor %}</td>
+        <td>{% if item.is_superuser %}{% include "components/status_badge.html" with status="enabled" label="是" %}{% else %}-{% endif %}</td>
+        <td>{% if item.is_active %}{% include "components/status_badge.html" with status="enabled" label="启用" %}{% else %}{% include "components/status_badge.html" with status="disabled" label="禁用" %}{% endif %}</td>
+        <td>{{ item.last_login|date:"Y-m-d H:i"|default:"-" }}</td>
+        <td class="row-actions"><a class="btn btn-soft btn-sm" href="{% url 'web-edit' 'system' 'users' item.pk %}">编辑</a>{% if item.pk != request.user.pk %}<button class="btn btn-danger btn-sm" type="button" data-confirm="删除用户后不可恢复，请确认。" data-confirm-url="/api/users/{{ item.pk }}/" data-confirm-method="DELETE" data-confirm-success="用户已删除">删除</button>{% endif %}</td>
+      </tr>{% empty %}<tr><td colspan="9">{% include "components/empty_state.html" with empty_title="暂无用户" empty_text="请创建系统用户。" %}</td></tr>{% endfor %}</tbody>
+      {% elif page == 'roles' %}
+      <thead><tr><th>角色名称</th><th>角色编码</th><th>用户数</th><th>权限数</th><th>描述</th><th>更新时间</th><th>操作</th></tr></thead>
+      <tbody>{% for item in objects %}<tr>
+        <td><strong>{{ item.name }}</strong></td><td>{{ item.code }}</td><td><span class="status-badge">{{ item.users.count }}</span></td><td><span class="status-badge status-used">{{ item.permissions.count }}</span></td><td class="truncate">{{ item.description|default:"-" }}</td><td>{{ item.updated_at|date:"Y-m-d H:i" }}</td>
+        <td class="row-actions"><a class="btn btn-soft btn-sm" href="{% url 'web-edit' 'system' 'roles' item.pk %}">编辑</a><button class="btn btn-danger btn-sm" type="button" data-confirm="删除角色会解除用户角色绑定，请确认。" data-confirm-url="/api/roles/{{ item.pk }}/" data-confirm-method="DELETE" data-confirm-success="角色已删除">删除</button></td>
+      </tr>{% empty %}<tr><td colspan="7">{% include "components/empty_state.html" with empty_title="暂无角色" empty_text="可先创建角色并绑定权限。" %}</td></tr>{% endfor %}</tbody>
+      {% elif page == 'permissions' %}
+      <thead><tr><th>模块</th><th>动作</th><th>权限编码</th><th>描述</th></tr></thead>
+      <tbody>{% for item in objects %}<tr><td>{{ item.module }}</td><td>{{ item.action }}</td><td><strong>{{ item.code }}</strong></td><td>{{ item.description|default:"-" }}</td></tr>{% empty %}<tr><td colspan="4">{% include "components/empty_state.html" with empty_title="暂无权限" empty_text="请执行 init_rbac 初始化权限编码。" %}</td></tr>{% endfor %}</tbody>
+      {% elif page == 'configs' %}
+      <thead><tr><th>配置键</th><th>配置值</th><th>描述</th><th>更新时间</th><th>操作</th></tr></thead>
+      <tbody>{% for item in objects %}<tr><td><strong>{{ item.key }}</strong></td><td class="truncate">{{ item.value }}</td><td class="truncate">{{ item.description|default:"-" }}</td><td>{{ item.updated_at|date:"Y-m-d H:i" }}</td><td class="row-actions"><a class="btn btn-soft btn-sm" href="{% url 'web-edit' 'system' 'configs' item.pk %}">编辑</a><button class="btn btn-danger btn-sm" type="button" data-confirm="删除配置后不可恢复，请确认。" data-confirm-url="/api/health/configs/{{ item.pk }}/" data-confirm-method="DELETE" data-confirm-success="配置已删除">删除</button></td></tr>{% empty %}<tr><td colspan="5">{% include "components/empty_state.html" with empty_title="暂无配置" empty_text="可新增平台级 JSON 配置。" %}</td></tr>{% endfor %}</tbody>
+      {% elif page == 'health' %}
+      <thead><tr><th>服务名称</th><th>状态</th><th>IP 地址</th><th>端口</th><th>最近检测</th><th>响应耗时</th><th>错误信息</th></tr></thead>
+      <tbody>{% for item in objects %}<tr><td><strong>{{ item.service_name }}</strong></td><td>{% include "components/status_badge.html" with status=item.status label=item.get_status_display %}</td><td>{{ item.ip_address|default:"-" }}</td><td>{{ item.port|default:"-" }}</td><td>{{ item.checked_at|date:"Y-m-d H:i:s" }}</td><td>{% if item.response_time_ms != None %}{{ item.response_time_ms }} ms{% else %}-{% endif %}</td><td class="truncate">{{ item.error_message|default:"-" }}</td></tr>{% empty %}<tr><td colspan="7">{% include "components/empty_state.html" with empty_title="暂无检测记录" empty_text="点击立即检测生成组件健康状态。" %}</td></tr>{% endfor %}</tbody>
+      {% endif %}
+    </table>
+  </div>
+  <div class="pagination-bar"><span>共 {{ total_count }} 条 · 最多显示 100 条</span><span></span></div>
+</section>
+{% endif %}
+{% endblock %}

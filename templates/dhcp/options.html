@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p>{{ page_description }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="/ui/dhcp/options/new/">+ 新增 Option</a>
+    <a class="btn btn-soft" href="/ui/dhcp/deploy/">DHCP 配置下发</a>
+  </div>
+</div>
+
+<div class="stat-grid stat-grid--compact">
+  <div class="stat-card">
+    <div>
+      <div class="label">Option 总数</div>
+      <div class="value">{{ summary.total }}</div>
+      <div class="trend">全部 DHCP Option</div>
+    </div>
+    <div class="stat-icon">O</div>
+  </div>
+  <div class="stat-card stat-green">
+    <div>
+      <div class="label">全局 Option</div>
+      <div class="value">{{ summary.global }}</div>
+      <div class="trend">写入 Dhcp4.option-data</div>
+    </div>
+    <div class="stat-icon">G</div>
+  </div>
+  <div class="stat-card stat-cyan">
+    <div>
+      <div class="label">子网 Option</div>
+      <div class="value">{{ summary.subnet }}</div>
+      <div class="trend">写入 subnet4.option-data</div>
+    </div>
+    <div class="stat-icon">S</div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div>
+      <div class="label">地址池 Option</div>
+      <div class="value">{{ summary.pool }}</div>
+      <div class="trend">写入 pools.option-data</div>
+    </div>
+    <div class="stat-icon">P</div>
+  </div>
+</div>
+
+<form class="card search-panel" method="get">
+  <div class="field">
+    <label for="q">关键词</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="搜索 Option 名称、Code、内容或描述">
+  </div>
+  <div class="field">
+    <label for="scope_type">作用域</label>
+    <select id="scope_type" name="scope_type">
+      <option value="">全部作用域</option>
+      <option value="global" {% if scope_type == "global" %}selected{% endif %}>全局</option>
+      <option value="subnet" {% if scope_type == "subnet" %}selected{% endif %}>子网</option>
+      <option value="pool" {% if scope_type == "pool" %}selected{% endif %}>地址池</option>
+    </select>
+  </div>
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="/ui/dhcp/options/">重置</a>
+</form>
+
+<section class="card table-card">
+  <div class="table-tools">
+    <span class="selected-count">共 {{ total_count }} 条 Option</span>
+    <div class="row-actions">
+      <button class="btn btn-info btn-sm" type="button" data-action-url="/api/dhcp/config-set/" data-action-success="DHCP 配置下发任务已创建">下发配置</button>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>作用域</th>
+          <th>作用域对象</th>
+          <th>Option Code</th>
+          <th>Option Name</th>
+          <th>Option Value</th>
+          <th>描述</th>
+          <th>更新时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in options %}
+        <tr>
+          <td><span class="status-badge {{ row.scope_badge }}">{{ row.obj.get_scope_type_display }}</span></td>
+          <td>{{ row.scope_label }}</td>
+          <td><strong>{{ row.obj.option_code }}</strong></td>
+          <td><strong>{{ row.obj.option_name }}</strong></td>
+          <td class="truncate">{{ row.obj.option_value }}</td>
+          <td class="truncate">{{ row.obj.description|default:"-" }}</td>
+          <td>{{ row.obj.updated_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn btn-soft btn-sm" href="/ui/dhcp/options/{{ row.obj.id }}/edit/">编辑</a>
+              <button class="btn btn-danger btn-sm" type="button" data-confirm="删除该 DHCP Option 后需要重新下发配置才会在 Kea 生效，请确认。" data-confirm-url="/api/dhcp/options/{{ row.obj.id }}/" data-confirm-method="DELETE" data-confirm-success="DHCP Option 已删除">删除</button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">{% include "components/empty_state.html" %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination-bar">
+    <span>共 {{ total_count }} 条 · 第 1 页</span>
+    <div class="row-actions">
+      <button class="btn btn-ghost btn-sm" type="button">上一页</button>
+      <button class="btn btn-ghost btn-sm" type="button">下一页</button>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -95,13 +95,17 @@ class RoleViewSet(UnifiedModelViewSet):
     search_fields = ['name', 'code']
 
 
-class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
+class PermissionViewSet(UnifiedModelViewSet):
+    http_method_names = ['get', 'head', 'options']
     queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
+    permission_module = 'system'
 
 
-class LoginLogViewSet(viewsets.ReadOnlyModelViewSet):
+class LoginLogViewSet(UnifiedModelViewSet):
+    http_method_names = ['get', 'head', 'options']
     queryset = LoginLog.objects.all()
     serializer_class = LoginLogSerializer
     filterset_fields = ['username', 'result']
     search_fields = ['username', 'request_ip']
+    permission_module = 'audit'

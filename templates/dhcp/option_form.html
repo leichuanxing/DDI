@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p>{{ page_description }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="{{ back_url }}">返回列表</a>
+  </div>
+</div>
+
+<form class="card form-card" method="post" novalidate id="dhcpOptionForm">
+  {% csrf_token %}
+  <div class="card-header">
+    <h2>{{ form_title }}</h2>
+    <span class="status-badge status-pending">保存后需下发配置</span>
+  </div>
+  <div class="card-body">
+    {% for field in form %}
+      <div class="field" {% if field.name == "scope_object" %}data-option-scope-object{% endif %}>
+        <label for="{{ field.id_for_label }}"{% if field.field.required %} class="required"{% endif %}>{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<small class="help-text">{{ field.help_text }}</small>{% endif %}
+        {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+      </div>
+    {% endfor %}
+    {% if form.non_field_errors %}
+      <div class="field form-errors">
+        {% for error in form.non_field_errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  <div class="form-footer">
+    <a class="btn btn-ghost" href="{{ back_url }}">取消</a>
+    <button class="btn btn-primary" type="submit">保存</button>
+  </div>
+</form>
+
+<section class="card table-card" style="margin-top:16px">
+  <div class="card-header"><h2>常用 Option 参考</h2></div>
+  <div class="table-responsive">
+    <table class="data-table data-table--compact">
+      <thead>
+        <tr><th>Code</th><th>Name</th><th>说明</th><th>示例</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>3</td><td>routers</td><td>默认网关</td><td>192.168.31.1</td></tr>
+        <tr><td>6</td><td>domain-name-servers</td><td>DNS Server</td><td>192.168.31.61,114.114.114.114</td></tr>
+        <tr><td>15</td><td>domain-name</td><td>默认域名</td><td>example.local</td></tr>
+        <tr><td>32</td><td>router-solicitation-address</td><td>路由器请求地址</td><td>192.168.31.1</td></tr>
+        <tr><td>42</td><td>ntp-servers</td><td>NTP Server</td><td>192.168.31.10</td></tr>
+        <tr><td>66</td><td>tftp-server-name</td><td>TFTP Server</td><td>192.168.31.20</td></tr>
+        <tr><td>67</td><td>boot-file-name</td><td>PXE 启动文件</td><td>pxelinux.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+  (function () {
+    var scopeType = document.querySelector("[data-option-scope='type']");
+    var scopeObjectField = document.querySelector("[data-option-scope-object]");
+    var scopeObject = scopeObjectField ? scopeObjectField.querySelector("select") : null;
+    if (!scopeType || !scopeObjectField || !scopeObject) return;
+
+    function syncScopeObject() {
+      var type = scopeType.value || "global";
+      scopeObjectField.style.display = type === "global" ? "none" : "";
+      Array.from(scopeObject.options).forEach(function (option) {
+        var value = option.value || "";
+        option.hidden = !!value && !value.startsWith(type + ":");
+      });
+      if (type === "global") {
+        scopeObject.value = "";
+      } else if (scopeObject.value && !scopeObject.value.startsWith(type + ":")) {
+        scopeObject.value = "";
+      }
+    }
+
+    scopeType.addEventListener("change", syncScopeObject);
+    syncScopeObject();
+  })();
+</script>
+{% endblock %}

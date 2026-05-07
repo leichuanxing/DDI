@@ -28,6 +28,15 @@ if [ ! -f "$PACKAGE_DIR/docker-compose.yml" ]; then
   exit 1
 fi
 
+if [ -f "$PACKAGE_DIR/BUNDLE_VERSION" ]; then
+  echo "Offline bundle: $(tr -d '\n' <"$PACKAGE_DIR/BUNDLE_VERSION")"
+elif [ -f "$PACKAGE_DIR/version.conf" ]; then
+  grep -E '^[[:space:]]*ddi_version[[:space:]]*=' "$PACKAGE_DIR/version.conf" | head -n1 || true
+fi
+if [ -f "$PACKAGE_DIR/BUNDLE_BUILT_AT" ]; then
+  echo "Built at: $(tr -d '\n' <"$PACKAGE_DIR/BUNDLE_BUILT_AT")"
+fi
+
 echo "[1/4] Loading offline images"
 for image_tar in \
   "$IMAGES_DIR/mysql-8.4.tar" \

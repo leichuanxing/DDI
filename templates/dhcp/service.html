@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "components/page_header.html" with page_title=page_title page_description=page_description primary_action="" %}
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div>
+      <div class="label">Kea Control Agent</div>
+      <div class="value" style="font-size:22px">{{ config.api_port }}</div>
+      <div class="trend">{{ config.api_url }}</div>
+    </div>
+    <div class="stat-icon">API</div>
+  </div>
+  <div class="stat-card {% if health.status == 'normal' %}stat-green{% else %}stat-red{% endif %}">
+    <div>
+      <div class="label">连通状态</div>
+      <div class="value" style="font-size:22px">{{ health_label }}</div>
+      <div class="trend">{{ health.error_message|default:"ddi-web -> ddi-kea:8000" }}</div>
+    </div>
+    <div class="stat-icon">S</div>
+  </div>
+  <div class="stat-card stat-cyan">
+    <div>
+      <div class="label">服务类型</div>
+      <div class="value" style="font-size:22px">{{ config.service_type }}</div>
+      <div class="trend">当前管理服务</div>
+    </div>
+    <div class="stat-icon">D</div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div>
+      <div class="label">支持命令</div>
+      <div class="value" style="font-size:22px">{{ command_count }}</div>
+      <div class="trend">{% if commands.success %}Control Agent 已返回命令列表{% else %}暂未获取{% endif %}</div>
+    </div>
+    <div class="stat-icon">C</div>
+  </div>
+</div>
+
+<div class="dashboard-grid">
+  <section class="card form-card">
+    <div class="card-header">
+      <h2>Kea API 配置</h2>
+      <span class="status-badge {% if config_complete %}status-enabled{% else %}status-warning{% endif %}">
+        {% if config_complete %}配置完整{% else %}配置不完整{% endif %}
+      </span>
+    </div>
+    <form method="post" novalidate id="keaServiceForm">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save" id="keaServiceAction">
+      <div class="card-body">
+        <div class="field">
+          <label class="required" for="api_url">API 地址</label>
+          <input id="api_url" name="api_url" value="{{ config.api_url }}" placeholder="http://ddi-kea:8000">
+          <span class="help-text">默认关联容器：{{ default_config.api_url }}</span>
+        </div>
+        <div class="field">
+          <label class="required" for="api_port">API 端口</label>
+          <input id="api_port" name="api_port" type="number" min="1" max="65535" value="{{ config.api_port }}">
+        </div>
+        <div class="field">
+          <label class="required" for="service_type">服务类型</label>
+          <select id="service_type" name="service_type">
+            <option value="dhcp4" {% if config.service_type == 'dhcp4' %}selected{% endif %}>DHCPv4</option>
+            <option value="dhcp6" {% if config.service_type == 'dhcp6' %}selected{% endif %}>DHCPv6</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="required" for="timeout">连接超时</label>
+          <input id="timeout" name="timeout" type="number" min="1" max="60" value="{{ config.timeout }}">
+        </div>
+        <div class="field">
+          <label>启用认证</label>
+          <label style="display:flex;align-items:center;min-height:36px;font-weight:500">
+            <input type="checkbox" name="auth_enabled" {% if config.auth_enabled %}checked{% endif %}>
+            Control Agent 使用认证
+          </label>
+        </div>
+        <div class="field">
+          <label>健康检查</label>
+          <label style="display:flex;align-items:center;min-height:36px;font-weight:500">
+            <input type="checkbox" name="health_check_enabled" {% if config.health_check_enabled %}checked{% endif %}>
+            页面打开时检测 Kea API
+          </label>
+        </div>
+        <div class="field">
+          <label for="username">认证用户名</label>
+          <input id="username" name="username" value="{{ config.username }}" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="password">认证密码</label>
+          <input id="password" name="password" type="password" placeholder="留空则不修改原密码" autocomplete="new-password">
+        </div>
+      </div>
+      <div class="form-footer">
+        <button class="btn btn-ghost" type="button" data-kea-submit="check">测试连接</button>
+        <button class="btn btn-soft" type="button" data-kea-submit="reset">恢复默认容器</button>
+        <button class="btn btn-primary" type="button" data-kea-submit="save">保存配置</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card table-card">
+    <div class="card-header">
+      <h2>运行状态</h2>
+      <div class="page-actions">
+        <button class="btn btn-ghost btn-sm" type="button" data-action-url="/api/dhcp/config-test/" data-action-success="DHCP 配置测试任务已创建">配置测试</button>
+        <button class="btn btn-soft btn-sm" type="button" data-action-url="/api/dhcp/config-set/" data-action-success="DHCP 配置下发任务已创建">下发配置</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-action-url="/api/dhcp/config-reload/" data-action-success="Kea 重载任务已创建">重载服务</button>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <tbody>
+          <tr><th>关联容器</th><td>{% if is_default_container %}<span class="status-badge status-enabled">已关联 ddi-kea</span>{% else %}<span class="status-badge status-warning">非默认容器</span>{% endif %}</td></tr>
+          <tr><th>API 地址</th><td>{{ config.api_url }}</td></tr>
+          <tr><th>响应耗时</th><td>{{ health.response_time_ms|default:"-" }} ms</td></tr>
+          <tr><th>解析 IP</th><td>{{ health.ip_address|default:"-" }}</td></tr>
+          <tr><th>版本查询</th><td>{% if version.success %}<span class="status-badge status-enabled">正常</span>{% else %}<span class="status-badge status-failed">失败</span> {{ version.message }}{% endif %}</td></tr>
+          <tr><th>状态查询</th><td>{% if status_info.success %}<span class="status-badge status-enabled">正常</span>{% else %}<span class="status-badge status-failed">失败</span> {{ status_info.message }}{% endif %}</td></tr>
+          <tr><th>当前配置</th><td>{% if current_config.success %}<span class="status-badge status-enabled">可读取</span>{% else %}<span class="status-badge status-failed">读取失败</span> {{ current_config.message }}{% endif %}</td></tr>
+          <tr><th>错误信息</th><td>{{ health.error_message|default:"-" }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<script>
+  document.querySelectorAll("[data-kea-submit]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var form = document.getElementById("keaServiceForm");
+      var action = document.getElementById("keaServiceAction");
+      if (!form || !action) return;
+      action.value = button.dataset.keaSubmit || "save";
+      form.noValidate = true;
+      form.submit();
+    });
+  });
+</script>
+{% endblock %}

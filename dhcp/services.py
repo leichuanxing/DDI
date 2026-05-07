@@ -38,9 +38,23 @@ class DHCPService:
             return cfg
         return DHCPProviderConfig.objects.create(**cls.default_config_values())
 
+    @classmethod
+    def reset_default_config(cls):
+        cfg = cls.ensure_config()
+        defaults = cls.default_config_values()
+        for key, value in defaults.items():
+            setattr(cfg, key, value)
+        cfg.save()
+        return cfg
+
     @staticmethod
     def client():
         cfg = DHCPService.ensure_config()
+        auth = (cfg.username, cfg.password) if cfg.auth_enabled else None
+        return KeaClient(cfg.api_url, cfg.timeout, auth)
+
+    @classmethod
+    def client_for_config(cls, cfg):
         auth = (cfg.username, cfg.password) if cfg.auth_enabled else None
         return KeaClient(cfg.api_url, cfg.timeout, auth)
 
@@ -48,7 +62,16 @@ class DHCPService:
     def build_dhcp4_config():
         subnets = []
         for subnet in DHCPSubnet.objects.prefetch_related('pools', 'reservations').filter(status='enabled').order_by('subnet_id'):
-            pools = [{'pool': f'{p.pool_start} - {p.pool_end}'} for p in subnet.pools.filter(status='enabled')]
+            pools = []
+            for pool in subnet.pools.filter(status='enabled'):
+                pool_item = {'pool': f'{pool.pool_start} - {pool.pool_end}'}
+                pool_options = [
+                    {'code': opt.option_code, 'name': opt.option_name, 'data': opt.option_value}
+                    for opt in DHCPOption.objects.filter(scope_type='pool', scope_id=pool.id).order_by('option_code')
+                ]
+                if pool_options:
+                    pool_item['option-data'] = pool_options
+                pools.append(pool_item)
             reservations = []
             for r in subnet.reservations.filter(status='enabled'):
                 if not DHCPService.reservation_has_identifier(r):
@@ -68,7 +91,7 @@ class DHCPService:
                 options.append({'name': 'domain-name-servers', 'data': subnet.dns_servers})
             if subnet.domain_name:
                 options.append({'name': 'domain-name', 'data': subnet.domain_name})
-            for opt in DHCPOption.objects.filter(scope_type='subnet', scope_id=subnet.id):
+            for opt in DHCPOption.objects.filter(scope_type='subnet', scope_id=subnet.id).order_by('option_code'):
                 options.append({'code': opt.option_code, 'name': opt.option_name, 'data': opt.option_value})
             subnet_item = {
                 'id': subnet.subnet_id,
@@ -85,7 +108,10 @@ class DHCPService:
             if subnet.relay_ip:
                 subnet_item['relay'] = {'ip-addresses': [str(subnet.relay_ip)]}
             subnets.append(subnet_item)
-        global_options = [{'code': o.option_code, 'name': o.option_name, 'data': o.option_value} for o in DHCPOption.objects.filter(scope_type='global')]
+        global_options = [
+            {'code': o.option_code, 'name': o.option_name, 'data': o.option_value}
+            for o in DHCPOption.objects.filter(scope_type='global').order_by('option_code')
+        ]
         return {
             'Dhcp4': {
                 'interfaces-config': {'interfaces': ['*']},

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p>{{ page_description }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="/ui/audit/operations/">操作审计</a>
+    <a class="btn btn-ghost" href="/ui/audit/login/">登录日志</a>
+    <a class="btn btn-ghost" href="/ui/audit/changes/">配置变更</a>
+    {% if active_menu == "operations" %}<a class="btn btn-soft" href="/api/audit-logs/export/">导出审计</a>{% endif %}
+  </div>
+</div>
+
+<div class="stat-grid stat-grid--compact">
+  <div class="stat-card">
+    <div>
+      <div class="label">操作审计</div>
+      <div class="value">{{ summary.operations }}</div>
+      <div class="trend">用户和系统操作</div>
+    </div>
+    <div class="stat-icon">A</div>
+  </div>
+  <div class="stat-card stat-cyan">
+    <div>
+      <div class="label">登录日志</div>
+      <div class="value">{{ summary.login }}</div>
+      <div class="trend">登录成功与失败</div>
+    </div>
+    <div class="stat-icon">L</div>
+  </div>
+  <div class="stat-card stat-purple">
+    <div>
+      <div class="label">配置变更</div>
+      <div class="value">{{ summary.changes }}</div>
+      <div class="trend">DNS 同步与下发</div>
+    </div>
+    <div class="stat-icon">C</div>
+  </div>
+  <div class="stat-card stat-orange">
+    <div>
+      <div class="label">失败记录</div>
+      <div class="value">{{ summary.failed }}</div>
+      <div class="trend">需要关注的审计结果</div>
+    </div>
+    <div class="stat-icon">!</div>
+  </div>
+</div>
+
+<form class="card search-panel" method="get">
+  <div class="field">
+    <label for="q">关键词</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="用户、模块、动作、对象、IP 或错误信息">
+  </div>
+  <div class="field">
+    <label for="result">结果</label>
+    <select id="result" name="result">
+      <option value="">全部结果</option>
+      <option value="success" {% if result == "success" %}selected{% endif %}>成功</option>
+      <option value="failed" {% if result == "failed" %}selected{% endif %}>失败</option>
+    </select>
+  </div>
+  {% if active_menu == "operations" %}
+  <div class="field">
+    <label for="module">模块</label>
+    <select id="module" name="module">
+      <option value="">全部模块</option>
+      {% for item in modules %}<option value="{{ item }}" {% if module == item %}selected{% endif %}>{{ item|default:"-" }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if active_menu != "login" %}
+  <div class="field">
+    <label for="action">动作</label>
+    <select id="action" name="action">
+      <option value="">全部动作</option>
+      {% for item in actions %}<option value="{{ item }}" {% if action == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="{{ request.path }}">重置</a>
+</form>
+
+<section class="card table-card">
+  <div class="table-tools">
+    <span class="selected-count">共 {{ total_count }} 条 · 最多显示 100 条</span>
+  </div>
+  <div class="table-responsive">
+    <table class="data-table">
+      {% if active_menu == "login" %}
+      <thead><tr><th>用户名</th><th>来源 IP</th><th>结果</th><th>User Agent</th><th>错误信息</th><th>登录时间</th></tr></thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.username }}</td>
+          <td>{{ log.request_ip|default:"-" }}</td>
+          <td>{% include "components/status_badge.html" with status=log.result label=log.result %}</td>
+          <td class="truncate">{{ log.user_agent|default:"-" }}</td>
+          <td class="truncate">{{ log.error_message|default:"-" }}</td>
+          <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">{% include "components/empty_state.html" with empty_title="暂无登录日志" empty_text="用户登录后会显示在这里。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% elif active_menu == "changes" %}
+      <thead><tr><th>动作</th><th>Zone</th><th>记录</th><th>结果</th><th>操作人</th><th>错误信息</th><th>时间</th></tr></thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.action }}</td>
+          <td>{{ log.zone.name|default:"-" }}</td>
+          <td>{{ log.record.name|default:"-" }}</td>
+          <td>{% include "components/status_badge.html" with status=log.result label=log.result %}</td>
+          <td>{{ log.operator.username|default:"-" }}</td>
+          <td class="truncate">{{ log.error_message|default:"-" }}</td>
+          <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7">{% include "components/empty_state.html" with empty_title="暂无配置变更日志" empty_text="DNS 变更后会显示在这里。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% else %}
+      <thead><tr><th>操作人</th><th>模块</th><th>动作</th><th>对象</th><th>结果</th><th>来源 IP</th><th>请求路径</th><th>错误信息</th><th>时间</th></tr></thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.username|default:"系统" }}</td>
+          <td>{{ log.module }}</td>
+          <td>{{ log.action }}</td>
+          <td class="truncate">{{ log.object_name|default:log.object_type|default:"-" }}</td>
+          <td>{% include "components/status_badge.html" with status=log.result label=log.result %}</td>
+          <td>{{ log.request_ip|default:"-" }}</td>
+          <td class="truncate">{{ log.request_path|default:"-" }}</td>
+          <td class="truncate">{{ log.error_message|default:"-" }}</td>
+          <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9">{% include "components/empty_state.html" with empty_title="暂无审计日志" empty_text="关键操作完成后会显示在这里。" %}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% endif %}
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p>{{ page_description }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="/ui/tasks/list/">任务列表</a>
+    <a class="btn btn-ghost" href="/ui/tasks/logs/">任务日志</a>
+    <a class="btn btn-danger" href="/ui/tasks/failed/">失败任务</a>
+  </div>
+</div>
+
+<div class="stat-grid stat-grid--compact">
+  <div class="stat-card">
+    <div>
+      <div class="label">任务总数</div>
+      <div class="value">{{ summary.total }}</div>
+      <div class="trend">全部后台任务</div>
+    </div>
+    <div class="stat-icon">T</div>
+  </div>
+  <div class="stat-card stat-cyan">
+    <div>
+      <div class="label">等待 / 执行中</div>
+      <div class="value">{{ summary.pending }} / {{ summary.running }}</div>
+      <div class="trend">队列状态</div>
+    </div>
+    <div class="stat-icon">Q</div>
+  </div>
+  <div class="stat-card stat-green">
+    <div>
+      <div class="label">成功任务</div>
+      <div class="value">{{ summary.success }}</div>
+      <div class="trend">已完成</div>
+    </div>
+    <div class="stat-icon">S</div>
+  </div>
+  <div class="stat-card stat-orange">
+    <div>
+      <div class="label">失败任务</div>
+      <div class="value">{{ summary.failed }}</div>
+      <div class="trend">可查看日志并重试</div>
+    </div>
+    <div class="stat-icon">!</div>
+  </div>
+</div>
+
+<form class="card search-panel" method="get">
+  <div class="field">
+    <label for="q">关键词</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="任务类型、目标服务、错误信息或 Celery ID">
+  </div>
+  <div class="field">
+    <label for="status">状态</label>
+    <select id="status" name="status" {% if active_menu == "failed" %}disabled{% endif %}>
+      <option value="">全部状态</option>
+      <option value="pending" {% if status == "pending" %}selected{% endif %}>等待执行</option>
+      <option value="running" {% if status == "running" %}selected{% endif %}>执行中</option>
+      <option value="success" {% if status == "success" %}selected{% endif %}>成功</option>
+      <option value="failed" {% if status == "failed" %}selected{% endif %}>失败</option>
+      <option value="canceled" {% if status == "canceled" %}selected{% endif %}>已取消</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="task_type">任务类型</label>
+    <select id="task_type" name="task_type">
+      <option value="">全部类型</option>
+      {% for item in task_types %}
+        <option value="{{ item }}" {% if task_type == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="{{ request.path }}">重置</a>
+</form>
+
+<section class="dashboard-grid dashboard-grid--tables">
+  <div class="card table-card">
+    <div class="card-header">
+      <h2>{% if active_menu == "failed" %}失败任务{% else %}任务列表{% endif %}</h2>
+      <span class="selected-count">最多显示 50 条</span>
+    </div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>任务类型</th><th>目标服务</th><th>状态</th><th>创建人</th><th>创建时间</th><th>完成时间</th><th>错误信息</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in tasks %}
+          <tr>
+            <td>{{ task.id }}</td>
+            <td>{{ task.task_type }}</td>
+            <td>{{ task.target_service }}</td>
+            <td>{% include "components/status_badge.html" with status=task.status label=task.get_status_display %}</td>
+            <td>{{ task.created_by.username|default:"-" }}</td>
+            <td>{{ task.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ task.finished_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+            <td class="truncate">{{ task.error_message|default:"-" }}</td>
+            <td>
+              <div class="row-actions">
+                <a class="btn btn-ghost btn-sm" href="/ui/tasks/logs/?task_id={{ task.id }}">日志</a>
+                {% if task.status == "failed" %}
+                  <button class="btn btn-info btn-sm" type="button" data-action-url="/api/tasks/{{ task.id }}/retry/" data-action-success="任务已重新创建">重试</button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9">{% include "components/empty_state.html" with empty_title="暂无任务" empty_text="任务创建后会显示在这里。" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <div class="card-header">
+      <h2>执行日志</h2>
+      {% if selected_task %}<span class="status-badge status-{{ selected_task.status }}">任务 #{{ selected_task.id }} {{ selected_task.get_status_display }}</span>{% endif %}
+    </div>
+    <div class="table-responsive">
+      <table class="data-table data-table--compact">
+        <thead><tr><th>时间</th><th>级别</th><th>任务</th><th>日志内容</th></tr></thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>{% include "components/status_badge.html" with status=log.level label=log.level %}</td>
+            <td>#{{ log.task_id }}</td>
+            <td class="truncate">{{ log.message }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4">{% include "components/empty_state.html" with empty_title="暂无任务日志" empty_text="任务执行后会记录开始、结果和错误信息。" %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+{% if selected_task %}
+<section class="card table-card" style="margin-top:16px">
+  <div class="card-header"><h2>任务详情 #{{ selected_task.id }}</h2></div>
+  <div class="task-detail-grid">
+    <div>
+      <h3>请求内容</h3>
+      <pre class="json-pre">{{ selected_task.request_payload }}</pre>
+    </div>
+    <div>
+      <h3>响应内容</h3>
+      <pre class="json-pre">{{ selected_task.response_payload }}</pre>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -145,6 +145,34 @@ class DNSService:
         return content
 
     @classmethod
+    def relative_record_name(cls, rrset_name, zone_name):
+        name = cls.canonical_zone_name(rrset_name)
+        zone = cls.canonical_zone_name(zone_name)
+        if name == zone:
+            return zone
+        suffix = f'.{zone}'
+        if name.endswith(suffix):
+            return name[:-len(suffix)]
+        return name
+
+    @classmethod
+    def find_matching_record(cls, zone, rrset_name, record_type, content):
+        canonical_name = cls.canonical_record_name(rrset_name, zone.name)
+        for record in DNSRecord.objects.filter(zone=zone, record_type=record_type):
+            if cls.canonical_record_name(record.name, zone.name) != canonical_name:
+                continue
+            remote_content = (content or '').strip()
+            if record_type == 'MX':
+                local_content = cls.canonical_record_content(record)
+            elif record_type in {'CNAME', 'NS', 'PTR'}:
+                local_content = cls.canonical_record_content(record)
+            else:
+                local_content = (record.content or '').strip()
+            if local_content == remote_content:
+                return record
+        return None
+
+    @classmethod
     def push_zone(cls, zone, user=None, request=None):
         payload = cls.zone_payload(zone)
         result = cls.client().create_zone(payload)
@@ -220,13 +248,23 @@ class DNSService:
             record_type = rrset.get('type')
             ttl = rrset.get('ttl') or 3600
             for record in rrset.get('records', []):
-                DNSRecord.objects.update_or_create(
-                    zone=zone,
-                    name=name,
-                    record_type=record_type,
-                    content=record.get('content', ''),
-                    defaults={'ttl': ttl, 'disabled': record.get('disabled', False), 'synced_at': timezone.now()},
-                )
+                content = record.get('content', '')
+                existing = cls.find_matching_record(zone, name, record_type, content)
+                if existing:
+                    existing.ttl = ttl
+                    existing.disabled = record.get('disabled', False)
+                    existing.synced_at = timezone.now()
+                    existing.save(update_fields=['ttl', 'disabled', 'synced_at', 'updated_at'])
+                else:
+                    DNSRecord.objects.create(
+                        zone=zone,
+                        name=cls.relative_record_name(name, zone.name),
+                        record_type=record_type,
+                        content=content,
+                        ttl=ttl,
+                        disabled=record.get('disabled', False),
+                        synced_at=timezone.now(),
+                    )
                 touched += 1
         write_audit(request, action='dns_record_sync', module='dns', obj=zone, payload={'records': touched})
         return {'success': True, 'code': 'SUCCESS', 'message': 'DNS 记录同步完成', 'data': {'synced': touched}}
@@ -265,8 +303,28 @@ class DNSService:
             if not remote.get('success'):
                 differences.append({'zone': item.name, 'type': 'remote_error', 'message': remote.get('message')})
                 continue
-            remote_count = sum(len(rrset.get('records', [])) for rrset in (remote.get('data') or {}).get('rrsets', []))
-            local_count = item.records.count()
-            if local_count != remote_count:
-                differences.append({'zone': item.name, 'type': 'count_mismatch', 'local': local_count, 'remote': remote_count})
+            remote_records = set()
+            for rrset in (remote.get('data') or {}).get('rrsets', []):
+                for record in rrset.get('records', []):
+                    remote_records.add((
+                        cls.canonical_record_name(rrset.get('name'), item.name),
+                        rrset.get('type'),
+                        (record.get('content') or '').strip(),
+                    ))
+            local_records = set()
+            for record in item.records.all():
+                local_records.add((
+                    cls.canonical_record_name(record.name, item.name),
+                    record.record_type,
+                    cls.canonical_record_content(record) if record.record_type in {'CNAME', 'NS', 'PTR', 'MX'} else (record.content or '').strip(),
+                ))
+            missing_local = remote_records - local_records
+            missing_remote = local_records - remote_records
+            if missing_local or missing_remote:
+                differences.append({
+                    'zone': item.name,
+                    'type': 'record_mismatch',
+                    'missing_local': list(missing_local)[:10],
+                    'missing_remote': list(missing_remote)[:10],
+                })
         return {'success': True, 'code': 'SUCCESS', 'message': '差异比对完成', 'data': {'differences': differences}}

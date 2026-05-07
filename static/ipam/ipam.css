@@ -792,3 +792,79 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* IPAM visual refinement layer */
+.ipam-search-panel,
+.subnet-filter-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  gap: 10px;
+}
+
+.subnet-grid {
+  gap: 12px;
+}
+
+.subnet-card {
+  border-color: #e7ebf2;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .045);
+}
+
+.subnet-card-header {
+  gap: 10px;
+}
+
+.subnet-card h3 {
+  font-size: 16px;
+}
+
+.subnet-meta {
+  gap: 6px 12px;
+}
+
+.detail-grid > div,
+.probe-task-meta-grid > div {
+  border-color: #e7ebf2;
+  background: #fbfdff;
+}
+
+.probe-hub-card,
+.probe-task-list-card,
+.probe-task-meta-card {
+  border-color: #e7ebf2;
+}
+
+.probe-hub-body {
+  padding: 14px;
+}
+
+.probe-hub-grid {
+  gap: 12px;
+}
+
+.probe-hub-tile {
+  border-color: #e7ebf2;
+  box-shadow: none;
+}
+
+.probe-hub-tile:hover {
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .08);
+}
+
+.probe-result-ip-code,
+.ip-list-ip-code {
+  color: #0f172a;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 5px;
+}
+
+.ip-list-table th,
+.ip-list-table td,
+.probe-task-table th,
+.probe-task-table td,
+.probe-result-table th,
+.probe-result-table td {
+  border-bottom-color: #edf1f7;
+}

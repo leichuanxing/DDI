@@ -15,6 +15,16 @@ class DHCPProviderConfigSerializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_kwargs = {'password': {'write_only': True, 'required': False}}
 
+    def validate(self, attrs):
+        instance = self.instance or DHCPProviderConfig()
+        for key, value in attrs.items():
+            setattr(instance, key, value)
+        try:
+            instance.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, 'message_dict') else exc.messages)
+        return attrs
+
 
 class DHCPSubnetSerializer(serializers.ModelSerializer):
     pool_count = serializers.IntegerField(source='pools.count', read_only=True)
@@ -77,6 +87,19 @@ class DHCPOptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = DHCPOption
         fields = '__all__'
+
+    def validate(self, attrs):
+        instance = self.instance or DHCPOption()
+        for key, value in attrs.items():
+            setattr(instance, key, value)
+        try:
+            instance.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, 'message_dict') else exc.messages)
+        attrs['scope_id'] = instance.scope_id
+        attrs['option_name'] = instance.option_name
+        attrs['option_value'] = instance.option_value
+        return attrs
 
 
 class DHCPLeaseSerializer(serializers.ModelSerializer):

@@ -120,14 +120,6 @@ button, input, select, textarea { font: inherit; }
   color: #fff;
   background: rgba(255,255,255,.08);
 }
-.sidebar-version {
-  margin: 0;
-  padding: 8px 18px 18px;
-  font-size: 11px;
-  color: #64748b;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-}
 body.sidebar-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
 body.sidebar-collapsed .brand-text,
 body.sidebar-collapsed .side-link span,
@@ -175,8 +167,33 @@ body.sidebar-collapsed .side-group-title { justify-content: center; padding: 0; 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   margin-left: auto;
+}
+.header-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  font-size: 12px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.header-version-label {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.header-version-value {
+  color: var(--primary);
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 .header-user {
   display: flex;
@@ -597,6 +614,170 @@ body.sidebar-collapsed .side-group-title { justify-content: center; padding: 0; 
   margin-bottom: 12px;
 }
 
+.dashboard-page--ops {
+  max-width: 1560px;
+}
+
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.dashboard-hero-main,
+.dashboard-risk-grid {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.dashboard-hero-main {
+  padding: 18px 20px;
+}
+
+.dashboard-hero-kicker {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dashboard-hero-main h2 {
+  margin: 6px 0 4px;
+  font-size: 22px;
+}
+
+.dashboard-hero-main p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.dashboard-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.dashboard-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.dashboard-risk-card {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  background: #fff;
+}
+
+.dashboard-risk-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dashboard-risk-card strong {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.dashboard-risk-card:hover {
+  background: var(--primary-weak);
+}
+
+.dashboard-nav-pills--ops {
+  margin-bottom: 14px;
+}
+
+.dashboard-modules--ops {
+  margin-bottom: 14px;
+}
+
+.dashboard-stat-strip {
+  margin-bottom: 14px;
+}
+
+.dashboard-grid--ops {
+  grid-template-columns: minmax(0, 1.1fr) minmax(420px, .9fr);
+  align-items: stretch;
+}
+
+.dashboard-grid--lower {
+  margin-top: 0;
+}
+
+.dashboard-health-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.service-health-grid--ops {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.service-health-cell {
+  color: inherit;
+}
+
+.service-health-error {
+  margin-top: 8px;
+  color: var(--danger);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-status-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-status-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 130px) minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+}
+
+.dashboard-status-row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-status-bar,
+.dashboard-mini-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.dashboard-status-bar i,
+.dashboard-mini-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+}
+
+.dashboard-mini-progress {
+  min-width: 120px;
+  margin-bottom: 4px;
+}
+
+.dashboard-audit-card {
+  margin-top: 16px;
+}
+
 .chart-grid--in-details {
   margin-bottom: 0;
 }
@@ -918,6 +1099,30 @@ body.sidebar-collapsed .side-group-title { justify-content: center; padding: 0; 
   white-space: nowrap;
 }
 .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+.task-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+.task-detail-grid h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.json-pre {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #111827;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .pagination-bar {
   display: flex;
   align-items: center;
@@ -1037,6 +1242,7 @@ body.sidebar-collapsed .side-group-title { justify-content: center; padding: 0; 
 @media (max-width: 1200px) {
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid, .chart-grid { grid-template-columns: 1fr; }
+  .dashboard-hero { grid-template-columns: 1fr; }
   .dashboard-modules { grid-template-columns: 1fr; }
   .search-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-quick-links { gap: 8px; }
@@ -1058,6 +1264,295 @@ body.sidebar-collapsed .side-group-title { justify-content: center; padding: 0; 
   body.sidebar-collapsed { grid-template-columns: 1fr; }
   .content-wrap { padding: 16px; }
   .header-title span, .header-user div { display: none; }
+  .header-version-label { display: none; }
+  .header-version { padding: 5px 10px; gap: 0; }
   .page-header { display: grid; }
   .stat-grid, .search-panel, .form-card .card-body { grid-template-columns: 1fr; }
+  .dashboard-risk-grid, .service-health-grid--ops, .dashboard-status-row { grid-template-columns: 1fr; }
+  .dashboard-status-row strong { text-align: left; }
+}
+
+/* UI refinement layer: lighter, simpler, and consistent across template pages. */
+:root {
+  --shadow: 0 8px 22px rgba(15, 23, 42, .055);
+  --radius: 8px;
+}
+
+body {
+  letter-spacing: 0;
+}
+
+.content-wrap {
+  max-width: 1600px;
+  padding-top: 18px;
+}
+
+.top-header {
+  box-shadow: 0 1px 0 rgba(15, 23, 42, .04);
+}
+
+.brand {
+  padding-inline: 16px;
+}
+
+.side-nav {
+  padding-inline: 8px;
+}
+
+.side-link,
+.side-group-title,
+.side-sub a {
+  border-radius: 7px;
+}
+
+.side-sub a.active {
+  color: #fff;
+  background: rgba(255,255,255,.105);
+}
+
+.breadcrumb-bar {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.page-header {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.page-header h1 {
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.page-header p {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.page-actions,
+.row-actions {
+  flex-wrap: wrap;
+}
+
+.card,
+.stat-card,
+.dashboard-module-card,
+.dashboard-hero-main,
+.dashboard-risk-grid {
+  border-color: #e7ebf2;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .045);
+}
+
+.card-header {
+  min-height: 46px;
+  padding-inline: 14px;
+  background: #fff;
+}
+
+.card-header h2 {
+  font-size: 15px;
+}
+
+.card-body {
+  padding: 14px;
+}
+
+.btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-weight: 700;
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+.btn-primary {
+  box-shadow: 0 6px 14px rgba(37, 99, 235, .14);
+}
+
+.search-panel {
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(150px, 1fr)) auto auto;
+  align-items: end;
+  padding: 12px;
+  gap: 10px;
+}
+
+.field label {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.field input,
+.field select,
+.field textarea {
+  min-height: 34px;
+  border-color: #dfe5ee;
+  border-radius: 7px;
+}
+
+.field textarea {
+  min-height: 88px;
+}
+
+.form-card {
+  max-width: none;
+}
+
+.form-card .card-body {
+  gap: 12px 14px;
+}
+
+.form-card .field ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfdff;
+  list-style: none;
+}
+
+.form-card .field li label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.table-card {
+  border-radius: var(--radius);
+}
+
+.table-tools {
+  padding: 10px 14px;
+  background: #fff;
+}
+
+.data-table th {
+  background: #f8fafc;
+  font-weight: 800;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 12px;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background: #fcfdff;
+}
+
+.data-table tbody tr:hover {
+  background: #f5f8ff;
+}
+
+.truncate {
+  max-width: 320px;
+}
+
+.pagination-bar {
+  padding: 10px 14px;
+  background: #fff;
+  border-top: 1px solid var(--line);
+}
+
+.stat-grid {
+  gap: 12px;
+}
+
+.stat-card {
+  min-height: 96px;
+  padding: 14px;
+}
+
+.stat-card .value {
+  font-size: 28px;
+}
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.status-badge {
+  min-height: 22px;
+  padding-inline: 8px;
+}
+
+.dashboard-grid,
+.chart-grid,
+.dashboard-modules {
+  gap: 14px;
+}
+
+.dashboard-module-card {
+  padding: 13px 14px 12px;
+}
+
+.dashboard-module-card-head {
+  margin-bottom: 10px;
+  padding-bottom: 9px;
+}
+
+.empty-state {
+  padding: 22px 12px;
+}
+
+.modal-mask {
+  background: rgba(15,23,42,.36);
+  backdrop-filter: blur(2px);
+}
+
+.confirm-dialog {
+  box-shadow: 0 24px 70px rgba(15,23,42,.22);
+}
+
+.toast-message {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+}
+
+.toast-error {
+  border-left-color: var(--danger);
+}
+
+.toast-success {
+  border-left-color: var(--success);
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+@media (max-width: 1200px) {
+  .search-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .content-wrap {
+    padding: 14px;
+  }
+  .page-header {
+    align-items: stretch;
+  }
+  .search-panel {
+    grid-template-columns: 1fr;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 9px 10px;
+  }
 }

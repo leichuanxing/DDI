@@ -6,8 +6,11 @@
 
 - `ddi-web`：Django Web、REST API、RBAC、任务调度、审计、仪表盘
 - `ddi-mysql`：业务数据库、PowerDNS 后端数据库、Kea Lease 数据库
-- `ddi-pdns`：PowerDNS Authoritative + API，外部提供 DNS 解析
-- `ddi-kea`：Kea DHCP4/6 + Control Agent，外部提供 DHCP 服务
+- `ddi-pdns`：**dnsmasq 监听 53**（递归/转发），按转发域将查询转给容器内 **PowerDNS 权威**（`127.0.0.1:5300`）；**8081** 提供 PowerDNS API
+- `ddi-kea`：**Kea DHCPv4** + Control Agent（**对外分配以 IPv4 为主**）；数据模型中含 DHCPv6 选项，当前配置生成与下发以 **`dhcp4`** 为主
+## UI界面
+
+![示例图片](./pic/home_page.png "UT界面")
 
 ## 架构说明
 
@@ -48,7 +51,8 @@
 - 批量删除记录
 - PowerDNS 同步、比对、下发
 - DNS 变更日志
-- 递归转发配置页面
+- **DNS 解析记录查询**（由 `ddi-pdns` 将 dnsmasq 查询日志上报至 `POST /api/dns/query-logs/ingest/`，见下文「容器与端口」）
+- **DNS 服务配置页**（`/ui/dns/service/`）内维护递归/上游 DNS、权威转发域等（写入 `docker/pdns/runtime/recursion.env` 并由容器加载）
 
 ### 4. DHCP
 
@@ -165,16 +169,16 @@ bash scripts/install.sh
 
 离线模式使用：
 
-- [docker-compose.offline.yml](/opt/codebuddy/ddi_system/docker-compose.offline.yml)
-- [scripts/build_offline_bundle.sh](/opt/codebuddy/ddi_system/scripts/build_offline_bundle.sh)
-- [scripts/install_offline_bundle.sh](/opt/codebuddy/ddi_system/scripts/install_offline_bundle.sh)
+- [docker-compose.offline.yml](docker-compose.offline.yml)
+- [scripts/build_offline_bundle.sh](scripts/build_offline_bundle.sh)
+- [scripts/install_offline_bundle.sh](scripts/install_offline_bundle.sh)
 
 说明：
 
 - 离线安装机需要预先安装好 Docker Engine 和 Docker Compose 插件
 - 离线包内已经包含 `ddi-web`、`ddi-pdns`、`ddi-kea`、`mysql:8.4` 镜像
 - 打包机与安装机应保持相同 CPU 架构，例如都为 `x86_64`
-- 打包脚本会读取仓库根目录 `version.conf` 中的 `ddi_version`，作为 Docker 构建参数写入各业务镜像标签（`org.opencontainers.image.version`），并将该文件一并放入离线 `package/` 供运行时注入版本展示
+- 打包脚本会读取仓库根目录 `version.conf` 中的 `ddi_version`：`export DDI_VERSION` 参与 `docker compose build`（镜像 `LABEL org.opencontainers.image.version`）；保存镜像前再打 **额外标签** `ddi-<组件>:<version>`（非法字符会规范为 `_`）并与 `:local` 一并打入同一 tar；在离线 `package/` 中写入 `version.conf`、在 `.env.example` 末尾追加 `DDI_VERSION=`、生成 `BUNDLE_VERSION` / `BUNDLE_BUILT_AT`，安装脚本启动时会打印版本信息
 
 ## 容器与端口
 
@@ -196,18 +200,21 @@ bash scripts/install.sh
 - 端口：`53/tcp`
 - 端口：`53/udp`
 - 端口：`8081/tcp`
-- 作用：权威 DNS + PowerDNS API
+- 作用：对外 DNS（dnsmasq 监听 53，按转发域转本地 PowerDNS 权威）、PowerDNS API
+- **解析记录查询**：dnsmasq 开启 `log-queries` 后，由容器内 `dns-query-log-forwarder.py` 将查询行 **POST** 到 `ddi-web` 的 `POST /api/dns/query-logs/ingest/`，Web 页「解析记录查询」即可展示（保留 7 天）。环境变量 `DDI_WEB_INGEST_URL` 默认 `http://ddi-web:8000/api/dns/query-logs/ingest/`；置 `DNS_QUERY_LOG_INGEST=0` 可关闭上报。
 
 ### `ddi-kea`
 
 - 端口：`67/udp`
 - 端口：`547/udp`
-- 内部暴露：`8000/tcp`
-- 作用：Kea DHCP + Control Agent
+- 内部暴露：`8000/tcp`（Control Agent API，供 `ddi-web` 调用）
+- 作用：Kea DHCPv4 与 Control Agent（配置下发、租约等）
 
 ## 关键环境变量
 
-`docker-compose.yml` 已内置默认值，常用变量如下：
+`docker-compose.yml` 已内置默认值。构建镜像时可通过 **`DDI_VERSION`** 传入版本（与根目录 `version.conf` 中 `ddi_version` 一致，离线打包脚本会自动 `export`），写入镜像 `LABEL org.opencontainers.image.version` 等；运行期 `ddi-web` 通过 `env_file: version.conf` 与设置项在界面展示版本。
+
+常用变量示例：
 
 ```env
 DJANGO_SECRET_KEY=change-me-please
@@ -232,7 +239,7 @@ TIME_ZONE=Asia/Shanghai
 
 MySQL 初始化脚本位于：
 
-- [docker/mysql/init/01-create-databases.sql](/opt/codebuddy/ddi_system/docker/mysql/init/01-create-databases.sql)
+- [docker/mysql/init/01-create-databases.sql](docker/mysql/init/01-create-databases.sql)
 
 它会：
 
@@ -269,9 +276,9 @@ python manage.py runserver 0.0.0.0:8000
 
 当前仓库包含基础测试：
 
-- [tests/test_smoke.py](/opt/codebuddy/ddi_system/tests/test_smoke.py)
-- [tests/test_ipam_phase2.py](/opt/codebuddy/ddi_system/tests/test_ipam_phase2.py)
-- [tests/test_web_auth.py](/opt/codebuddy/ddi_system/tests/test_web_auth.py)
+- [tests/test_smoke.py](tests/test_smoke.py)
+- [tests/test_ipam_phase2.py](tests/test_ipam_phase2.py)
+- [tests/test_web_auth.py](tests/test_web_auth.py)
 
 运行方式：
 
@@ -292,6 +299,7 @@ docker compose exec ddi-web python manage.py test tests
 - `/ui/dns/records/`：记录管理
 - `/ui/dns/sync/`：DNS 数据同步
 - `/ui/dns/change-logs/`：DNS 变更日志
+- `/ui/dns/query-logs/`：DNS 解析记录查询（依赖 `ddi-pdns` 向 `ddi-web` 上报，见上文）
 - `/ui/dhcp/service/`：Kea 服务配置
 - `/ui/dhcp/subnets/`：DHCP 子网
 - `/ui/dhcp/pools/`：地址池管理
@@ -310,6 +318,7 @@ docker compose exec ddi-web python manage.py test tests
 - `/ui/system/roles/`：角色管理
 - `/ui/system/permissions/`：权限管理
 - `/ui/system/configs/`：系统配置
+- `/ui/system/components/`：组件配置（DNS/DHCP 提供方等入口）
 - `/ui/system/health/`：健康检查
 
 ## 主要 API
@@ -360,6 +369,8 @@ docker compose exec ddi-web python manage.py test tests
 - `POST /api/dns/records/compare/`
 - `POST /api/dns/records/{id}/push-to-pdns/`
 - `GET /api/dns/change-logs/`
+- `GET /api/dns/query-logs/`（解析记录列表，保留约 7 天）
+- `POST /api/dns/query-logs/ingest/`（解析日志入库，供 `ddi-pdns` 内转发脚本调用；无 Session 认证）
 
 ### DHCP
 

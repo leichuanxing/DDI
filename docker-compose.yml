@@ -92,6 +92,7 @@ services:
       PDNS_FORWARD_ZONES: devnets.net
       PUBLIC_DNS_1: 223.5.5.5
       PUBLIC_DNS_2: 119.29.29.29
+      DDI_WEB_INGEST_URL: http://ddi-web:8000/api/dns/query-logs/ingest/
     volumes:
       - ddi_pdns_data:/var/lib/powerdns
       - ./docker/pdns/runtime:/etc/ddi-pdns:ro

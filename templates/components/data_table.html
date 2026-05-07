@@ -30,8 +30,12 @@
           {% for cell in row.cells %}<td{% if cell.truncate %} class="truncate"{% endif %}>{{ cell.html|safe }}</td>{% endfor %}
           <td>
             <div class="row-actions">
+              {% if row.show_view %}
               <a class="btn btn-ghost btn-sm" href="{{ row.api_url|default:'#' }}">查看</a>
+              {% endif %}
+              {% if row.show_edit %}
               {% if row.edit_url %}<a class="btn btn-soft btn-sm" href="{{ row.edit_url }}">编辑</a>{% else %}<button class="btn btn-soft btn-sm" type="button" data-toast="该对象暂不支持在此页面编辑。">编辑</button>{% endif %}
+              {% endif %}
               {% for action in row.extra_actions %}
                 <button class="btn {{ action.class }} btn-sm" type="button" data-confirm="{{ action.label }}该租约，请确认。" data-confirm-url="{{ action.url }}" data-confirm-method="POST" data-confirm-success="{{ action.success }}">{{ action.label }}</button>
               {% endfor %}

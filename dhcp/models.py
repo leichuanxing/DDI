@@ -8,10 +8,28 @@ from common.fields import EncryptedTextField
 
 MAC_RE = re.compile(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$')
 
+DHCP4_OPTION_NAMES = {
+    1: 'subnet-mask',
+    3: 'routers',
+    6: 'domain-name-servers',
+    12: 'host-name',
+    15: 'domain-name',
+    28: 'broadcast-address',
+    32: 'router-solicitation-address',
+    42: 'ntp-servers',
+    51: 'dhcp-lease-time',
+    66: 'tftp-server-name',
+    67: 'boot-file-name',
+    150: 'tftp-server-address',
+}
+
+DHCP4_IP_LIST_OPTIONS = {1, 3, 6, 28, 32, 42, 150}
+
 class DHCPProviderConfig(models.Model):
+    SERVICE_CHOICES = [('dhcp4', 'DHCPv4'), ('dhcp6', 'DHCPv6')]
     api_url = models.URLField('API 地址', default='http://ddi-kea:8000')
     api_port = models.IntegerField('API 端口', default=8000)
-    service_type = models.CharField('服务类型', max_length=16, default='dhcp4')
+    service_type = models.CharField('服务类型', max_length=16, choices=SERVICE_CHOICES, default='dhcp4')
     timeout = models.IntegerField('连接超时时间', default=5)
     auth_enabled = models.BooleanField('启用认证', default=False)
     username = models.CharField('认证用户名', max_length=64, blank=True)
@@ -20,6 +38,13 @@ class DHCPProviderConfig(models.Model):
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
     class Meta: verbose_name = 'Kea API 配置'; verbose_name_plural = 'Kea API 配置'
+    def clean(self):
+        if self.api_port < 1 or self.api_port > 65535:
+            raise ValidationError({'api_port': 'API 端口必须在 1 到 65535 之间'})
+        if self.timeout < 1 or self.timeout > 60:
+            raise ValidationError({'timeout': '连接超时时间必须在 1 到 60 秒之间'})
+        if self.auth_enabled and not (self.username and self.password):
+            raise ValidationError('启用认证时必须填写认证用户名和认证密码')
     def __str__(self):
         return f'{self.api_url}:{self.api_port}'
 
@@ -125,7 +150,13 @@ class DHCPReservation(models.Model):
         return f'{self.ip_address}{host}'
 
 class DHCPOption(models.Model):
-    scope_type = models.CharField('作用域类型', max_length=32)
+    SCOPE_CHOICES = (
+        ('global', '全局'),
+        ('subnet', '子网'),
+        ('pool', '地址池'),
+    )
+
+    scope_type = models.CharField('作用域类型', max_length=32, choices=SCOPE_CHOICES, default='global')
     scope_id = models.IntegerField('作用域ID', null=True, blank=True)
     option_code = models.IntegerField('Option Code')
     option_name = models.CharField('Option Name', max_length=64)
@@ -134,6 +165,41 @@ class DHCPOption(models.Model):
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
     class Meta: verbose_name = 'DHCP Option'; verbose_name_plural = 'DHCP Option'
+    def clean(self):
+        if self.scope_type not in dict(self.SCOPE_CHOICES):
+            raise ValidationError({'scope_type': '作用域类型必须为全局、子网或地址池'})
+        if self.option_code < 1 or self.option_code > 255:
+            raise ValidationError({'option_code': 'Option Code 必须在 1 到 255 之间'})
+        self.option_name = (self.option_name or '').strip()
+        self.option_value = (self.option_value or '').strip()
+        if not self.option_name:
+            raise ValidationError({'option_name': 'Option Name 不能为空'})
+        if not self.option_value:
+            raise ValidationError({'option_value': 'Option Value 不能为空'})
+        expected_name = DHCP4_OPTION_NAMES.get(self.option_code)
+        if expected_name and self.option_name != expected_name:
+            raise ValidationError({'option_name': f'Option Code {self.option_code} 对应名称应为 {expected_name}'})
+        if self.option_code in DHCP4_IP_LIST_OPTIONS:
+            for item in re.split(r'\s*,\s*', self.option_value):
+                try:
+                    ipaddress.ip_address(item)
+                except ValueError:
+                    raise ValidationError({'option_value': f'Option {self.option_name} 的值必须是 IP 地址，多个地址用英文逗号分隔'})
+        if self.scope_type == 'global':
+            self.scope_id = None
+        elif not self.scope_id:
+            raise ValidationError({'scope_id': '子网或地址池作用域必须填写作用域对象'})
+        elif self.scope_type == 'subnet' and not DHCPSubnet.objects.filter(pk=self.scope_id).exists():
+            raise ValidationError({'scope_id': '选择的 DHCP 子网不存在'})
+        elif self.scope_type == 'pool' and not DHCPPool.objects.filter(pk=self.scope_id).exists():
+            raise ValidationError({'scope_id': '选择的 DHCP 地址池不存在'})
+        duplicate = DHCPOption.objects.filter(
+            scope_type=self.scope_type,
+            scope_id=self.scope_id,
+            option_code=self.option_code,
+        ).exclude(pk=self.pk)
+        if duplicate.exists():
+            raise ValidationError('同一作用域下 Option Code 不能重复')
     def __str__(self):
         return f'{self.option_name}({self.option_code}) = {self.option_value}'
 

@@ -43,6 +43,9 @@ listen-address=0.0.0.0
 bind-interfaces
 cache-size=10000
 domain-needed
+log-queries
+log-facility=-
+log-async
 EOF
 
   if [ "${RECURSION_ENABLED}" = "1" ]; then
@@ -67,7 +70,20 @@ runtime_checksum() {
 }
 
 start_dnsmasq() {
-  dnsmasq --keep-in-foreground --conf-file="$DNSMASQ_CONF" &
+  (
+    _fifo="/run/dnsmasq/dns.stderr.fifo"
+    trap 'kill "$_dm" 2>/dev/null; kill "$_fw" 2>/dev/null; rm -f "$_fifo"' EXIT INT TERM
+    mkdir -p /run/dnsmasq
+    rm -f "$_fifo"
+    mkfifo "$_fifo"
+    # 先启动读端，避免 dnsmasq 写 fifo 时阻塞
+    python3 /usr/local/bin/dns-query-log-forwarder.py <"$_fifo" &
+    _fw=$!
+    dnsmasq --keep-in-foreground --conf-file="$DNSMASQ_CONF" 2>"$_fifo" &
+    _dm=$!
+    wait "$_dm"
+    kill "$_fw" 2>/dev/null || true
+  ) &
   DNSMASQ_PID="$!"
 }
 

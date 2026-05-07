@@ -1,4 +1,5 @@
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, authentication_classes, permission_classes
+from rest_framework import permissions
 
 from common.audit import write_audit
 from common.responses import error_response, success_response
@@ -6,9 +7,10 @@ from common.viewsets import UnifiedModelViewSet
 from tasks.serializers import SystemTaskSerializer
 from tasks.services import TaskService
 
-from .models import DNSChangeLog, DNSProviderConfig, DNSRecord, DNSZone
-from .serializers import DNSChangeLogSerializer, DNSProviderConfigSerializer, DNSRecordSerializer, DNSZoneSerializer
+from .models import DNSChangeLog, DNSProviderConfig, DNSQueryLog, DNSRecord, DNSZone
+from .serializers import DNSChangeLogSerializer, DNSProviderConfigSerializer, DNSQueryLogSerializer, DNSRecordSerializer, DNSZoneSerializer
 from .services import DNSService
+from .services_query_logs import DNSQueryLogService
 
 
 @api_view(['GET', 'PUT'])
@@ -151,3 +153,26 @@ class DNSChangeLogViewSet(UnifiedModelViewSet):
     queryset = DNSChangeLog.objects.all()
     serializer_class = DNSChangeLogSerializer
     permission_module = 'audit'
+
+
+class DNSQueryLogViewSet(UnifiedModelViewSet):
+    http_method_names = ['get', 'head', 'options']
+    queryset = DNSQueryLog.objects.all().order_by('-query_time')
+    serializer_class = DNSQueryLogSerializer
+    filterset_fields = ['client_ip', 'query_type', 'response_code', 'result']
+    search_fields = ['client_ip', 'query_name', 'answer', 'raw_message']
+    permission_module = 'dns'
+
+    def get_queryset(self):
+        DNSQueryLogService.cleanup_expired()
+        return super().get_queryset()
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([permissions.AllowAny])
+def query_log_ingest_view(request):
+    serializer = DNSQueryLogSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    log = DNSQueryLogService.create(**serializer.validated_data)
+    return success_response(DNSQueryLogSerializer(log).data, message='DNS 解析记录已入库', status=201)

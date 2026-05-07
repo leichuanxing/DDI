@@ -7,6 +7,10 @@
     <span>IPAM · DNS · DHCP 统一运维控制台</span>
   </div>
   <div class="header-actions">
+    <div class="header-version" title="当前平台发布版本">
+      <span class="header-version-label">版本</span>
+      <span class="header-version-value">v{{ ddi_version }}</span>
+    </div>
     <div class="header-user">
       <div class="avatar">{{ request.user.username|default:"U"|slice:":1"|upper }}</div>
       <div>

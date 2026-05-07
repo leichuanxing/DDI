@@ -3,7 +3,7 @@ import re
 
 from rest_framework import serializers
 
-from .models import DNSChangeLog, DNSProviderConfig, DNSRecord, DNSZone
+from .models import DNSChangeLog, DNSProviderConfig, DNSQueryLog, DNSRecord, DNSZone
 
 
 ZONE_RE = re.compile(r'^(?=.{1,253}\.?$)([a-zA-Z0-9_][a-zA-Z0-9_-]{0,62}\.)+[a-zA-Z]{2,}\.?$')
@@ -82,3 +82,20 @@ class DNSChangeLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = DNSChangeLog
         fields = '__all__'
+
+
+class DNSQueryLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DNSQueryLog
+        fields = '__all__'
+        read_only_fields = ['created_at']
+        extra_kwargs = {'query_time': {'required': False}}
+
+    def validate_query_name(self, value):
+        value = (value or '').strip().lower()
+        if not value:
+            raise serializers.ValidationError('查询域名不能为空')
+        return value
+
+    def validate_query_type(self, value):
+        return (value or '').strip().upper()

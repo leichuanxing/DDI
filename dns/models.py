@@ -66,3 +66,39 @@ class DNSChangeLog(models.Model):
         verbose_name = 'DNS 变更日志'
         verbose_name_plural = 'DNS 变更日志'
         ordering = ['-created_at']
+
+
+class DNSQueryLog(models.Model):
+    RESULT_CHOICES = [
+        ('success', '成功'),
+        ('failed', '失败'),
+        ('unknown', '未知'),
+    ]
+
+    query_time = models.DateTimeField('解析时间')
+    client_ip = models.GenericIPAddressField('客户端 IP', null=True, blank=True)
+    query_name = models.CharField('查询域名', max_length=255)
+    query_type = models.CharField('记录类型', max_length=16, blank=True)
+    response_code = models.CharField('响应码', max_length=32, blank=True)
+    answer = models.TextField('解析结果', blank=True)
+    server_ip = models.GenericIPAddressField('DNS 服务 IP', null=True, blank=True)
+    protocol = models.CharField('协议', max_length=16, blank=True)
+    latency_ms = models.IntegerField('响应耗时', null=True, blank=True)
+    result = models.CharField('结果', max_length=16, choices=RESULT_CHOICES, default='unknown')
+    raw_message = models.TextField('原始日志', blank=True)
+    created_at = models.DateTimeField('入库时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'DNS 解析记录'
+        verbose_name_plural = 'DNS 解析记录'
+        ordering = ['-query_time']
+        indexes = [
+            models.Index(fields=['-query_time']),
+            models.Index(fields=['client_ip']),
+            models.Index(fields=['query_name']),
+            models.Index(fields=['query_type']),
+            models.Index(fields=['response_code']),
+        ]
+
+    def __str__(self):
+        return f'{self.client_ip or "-"} {self.query_name} {self.query_type}'
